@@ -1,0 +1,11 @@
+{
+  "include": [
+    "jest.config.js"
+  ],
+  "compilerOptions": {
+    "allowJs": true
+  },
+  "exclude": [
+    "node_modules"
+  ]
+}

@@ -1,5 +1,0 @@
-@baseUrl = http://localhost:3000
-
-### Get Hello
-# Zwraca powitanie z aplikacji
-GET {{baseUrl}}
