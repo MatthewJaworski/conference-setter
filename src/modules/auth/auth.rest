@@ -1,0 +1,27 @@
+### Variables
+@keycloakUrl = http://localhost:8080
+@realm = conference-setter
+@clientId = conference-api
+@username = testuser
+@password = password123
+
+### Get Access Token
+# @name login
+POST {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+client_id={{clientId}}
+&grant_type=password
+&username={{username}}
+&password={{password}}
+
+### Extract token for next requests
+@accessToken = {{login.response.body.access_token}}
+
+### Test authenticated endpoint with real JWT
+GET http://localhost:3000/health-authenticated
+Authorization: Bearer {{accessToken}}
+
+### Test public endpoint (no auth required)
+GET http://localhost:3000/health
+

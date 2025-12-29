@@ -12,6 +12,17 @@ export function setupSwagger(app: INestApplication, config: SwaggerConfig): void
     .setTitle(config.title)
     .setDescription(config.description)
     .setVersion(config.version)
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'Authorization',
+        description: 'Enter JWT token from Keycloak',
+        in: 'header',
+      },
+      'bearer',
+    )
     .build();
 
   const documentFactory = () => SwaggerModule.createDocument(app, documentBuilder);
