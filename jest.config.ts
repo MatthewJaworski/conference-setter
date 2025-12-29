@@ -7,7 +7,6 @@ const config = JSON.parse(readFileSync(`${__dirname}/.swcrc`, 'utf-8'));
 
 const jestConfig: Config = {
   setupFiles: ['<rootDir>/jest-setup-file.ts'],
-  setupFilesAfterEnv: ['jest-extended/all'],
   rootDir: 'src',
   coverageReporters: ['text', 'lcovonly', 'cobertura'],
   transform: {
