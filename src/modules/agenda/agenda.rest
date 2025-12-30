@@ -1,0 +1,75 @@
+@url = http://localhost:3000
+@conferenceId = 91533b64-a308-4304-baca-98cbcb6db34f
+@agendaTrackId = 9357ae6f-611f-4a61-a0dc-7c7a3014a7f0
+@agendaSlotId = a1b2c3d4-e5f6-47a8-b9c0-d1e2f3a4b5c6
+@agendaItemId = 02496ff9-b394-45aa-acbc-ee6bcd1c35b2
+@userId = dev-user-123
+
+### Get all agenda tracks
+GET {{url}}/agenda/conferences/{{conferenceId}}/tracks
+
+### Get single agenda track
+GET {{url}}/agenda/conferences/{{conferenceId}}/tracks/{{agendaTrackId}}
+
+### Get all agenda items
+GET {{url}}/agenda/conferences/{{conferenceId}}/items
+
+### Get single agenda item
+GET {{url}}/agenda/conferences/{{conferenceId}}/items/{{agendaItemId}}
+
+### Create agenda track
+POST {{url}}/agenda/conferences/{{conferenceId}}/tracks
+x-id-claim: {{userId}}
+Content-Type: application/json
+
+{
+  "name": "Main Stage"
+}
+
+### Create agenda slot (placeholder)
+POST {{url}}/agenda/conferences/{{conferenceId}}/slots
+x-id-claim: {{userId}}
+Content-Type: application/json
+
+{
+  "agendaTrackId": "{{agendaTrackId}}",
+  "type": "placeholder",
+  "from": "2026-03-15T09:00:00Z",
+  "to": "2026-03-15T09:30:00Z",
+  "participantsLimit": null
+}
+
+### Create agenda slot (regular)
+POST {{url}}/agenda/conferences/{{conferenceId}}/slots
+x-id-claim: {{userId}}
+Content-Type: application/json
+
+{
+  "agendaTrackId": "{{agendaTrackId}}",
+  "type": "regular",
+  "from": "2026-03-15T09:30:00Z",
+  "to": "2026-03-15T10:30:00Z",
+  "participantsLimit": 500
+}
+
+### Assign placeholder to slot
+PUT {{url}}/agenda/conferences/{{conferenceId}}/slots/placeholder
+x-id-claim: {{userId}}
+Content-Type: application/json
+
+{
+  "agendaTrackId": "{{agendaTrackId}}",
+  "agendaSlotId": "{{agendaSlotId}}",
+  "placeholder": "Registration & Welcome Coffee"
+}
+
+### Assign agenda item to slot
+PUT {{url}}/agenda/conferences/{{conferenceId}}/slots/regular
+x-id-claim: {{userId}}
+Content-Type: application/json
+
+{
+  "agendaTrackId": "{{agendaTrackId}}",
+  "agendaSlotId": "{{agendaSlotId}}",
+  "agendaItemId": "{{agendaItemId}}"
+}

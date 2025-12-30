@@ -6,6 +6,7 @@ import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ConferencesModule } from './modules/conferences/conferences.module';
 import { SpeakersModule } from './modules/speakers/speakers.module';
+import { AgendaModule } from './modules/agenda/agenda.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { SpeakersModule } from './modules/speakers/speakers.module';
     AuthModule,
     ConferencesModule,
     SpeakersModule,
+    AgendaModule,
   ],
   controllers: [],
   providers: [],

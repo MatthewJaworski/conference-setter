@@ -23,3 +23,4 @@ export class AgendaTrackEntity {
   @Column({ type: 'int', default: 0 })
   version!: number;
 }
+export type AgendaTrackEntityType = AgendaTrackEntity;

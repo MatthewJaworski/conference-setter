@@ -54,6 +54,7 @@ export class AgendaItemRepository extends Repository<AgendaItemEntity> {
     }
     const entityData = updateDtoToAgendaItemEntity(dto);
     const merged = this.merge(existing, entityData);
+    merged.version = existing.version + 1;
     await this.save(merged);
   }
 

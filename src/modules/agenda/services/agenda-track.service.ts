@@ -8,8 +8,14 @@ import { UpdateAgendaTrackDto } from '../dtos/update-agenda-track.dto';
 export class AgendaTrackService {
   constructor(private readonly agendaTrackRepository: AgendaTrackRepository) {}
 
-  async getAsync(id: string): Promise<AgendaTrackDto | null> {
-    return await this.agendaTrackRepository.getAsync(id);
+  async getAsync(id: string): Promise<AgendaTrackDto> {
+    const track = await this.agendaTrackRepository.getAsync(id);
+
+    if (!track) {
+      throw new NotFoundException(`Agenda track with id ${id} not found`);
+    }
+
+    return track;
   }
 
   async browseAsync(): Promise<AgendaTrackDto[]> {

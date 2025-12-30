@@ -9,8 +9,14 @@ import { UpdateAgendaItemDto } from '../dtos/update-agenda-item.dto';
 export class AgendaItemService {
   constructor(private readonly agendaItemRepository: AgendaItemRepository) {}
 
-  async getAsync(id: string): Promise<AgendaItemDto | null> {
-    return await this.agendaItemRepository.getAsync(id);
+  async getAsync(id: string): Promise<AgendaItemDto> {
+    const item = await this.agendaItemRepository.getAsync(id);
+
+    if (!item) {
+      throw new NotFoundException(`Agenda item with id ${id} not found`);
+    }
+
+    return item;
   }
 
   async browseAsync(): Promise<AgendaItemDto[]> {

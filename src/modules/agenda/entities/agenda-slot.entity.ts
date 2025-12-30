@@ -6,7 +6,7 @@ import {
   PrimaryGeneratedColumn,
   TableInheritance,
 } from 'typeorm';
-import { AgendaTrackEntity } from './agenda-track.entity';
+import { AgendaTrackEntity, AgendaTrackEntityType } from './agenda-track.entity';
 
 @Entity('agenda_slots')
 @TableInheritance({ column: { type: 'varchar', name: 'type' } })
@@ -25,5 +25,5 @@ export abstract class AgendaSlotEntity {
 
   @ManyToOne(() => AgendaTrackEntity, (track) => track.slots)
   @JoinColumn({ name: 'trackId' })
-  track?: AgendaTrackEntity;
+  track?: AgendaTrackEntityType;
 }

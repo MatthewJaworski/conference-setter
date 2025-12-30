@@ -30,6 +30,13 @@ export class AgendaTrackRepository extends Repository<AgendaTrackEntity> {
     await this.save(agendaTrack);
   }
 
+  async existsAsync(id: string): Promise<boolean> {
+    const count = await this.count({
+      where: { id },
+    });
+    return count > 0;
+  }
+
   async getAsync(id: string): Promise<AgendaTrackDto | null> {
     const agendaTrack = await this.findOne({
       where: { id },
@@ -54,6 +61,7 @@ export class AgendaTrackRepository extends Repository<AgendaTrackEntity> {
     }
     const entityData = updateDtoToAgendaTrackEntity(dto);
     const merged = this.merge(existing, entityData);
+    merged.version = existing.version + 1;
     await this.save(merged);
   }
 
