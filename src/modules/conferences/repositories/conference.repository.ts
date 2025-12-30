@@ -1,9 +1,7 @@
-import { IRepository } from '@/shared/interfaces/repository/repository';
 import { Injectable } from '@nestjs/common';
 import { ConferenceEntity } from '../entities/conference.entity';
 import { ConferenceDetailsDto } from '../dtos/conference-detials.dto';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import {
   conferencesToDtos,
   conferenceToDto,
@@ -15,18 +13,13 @@ import { ConferenceUpdateDto } from '../dtos/conference-update.dto';
 import { ConferenceCreateDto } from '../dtos/conference-create.dto';
 
 @Injectable()
-export class ConferencesRepository implements IRepository<
-  ConferenceCreateDto,
-  ConferenceUpdateDto,
-  ConferenceDetailsDto
-> {
-  constructor(
-    @InjectRepository(ConferenceEntity)
-    private readonly conferenceRepository: Repository<ConferenceEntity>,
-  ) {}
+export class ConferencesRepository extends Repository<ConferenceEntity> {
+  constructor(private readonly dataSource: DataSource) {
+    super(ConferenceEntity, dataSource.createEntityManager());
+  }
 
   async getAsync(id: string): Promise<ConferenceDetailsDto | null> {
-    const conference = await this.conferenceRepository.findOne({
+    const conference = await this.findOne({
       where: { id },
       relations: ['host'],
     });
@@ -39,7 +32,7 @@ export class ConferencesRepository implements IRepository<
   }
 
   async browseAsync(): Promise<ConferenceDetailsDto[]> {
-    const conferences = await this.conferenceRepository.find();
+    const conferences = await this.find();
     const conferencesDtos = conferencesToDtos(conferences);
     return conferencesDtos;
   }
@@ -53,12 +46,12 @@ export class ConferencesRepository implements IRepository<
       id,
     };
 
-    const conference = this.conferenceRepository.create(conferenceToAdd);
-    await this.conferenceRepository.save(conference);
+    const conference = this.create(conferenceToAdd);
+    await this.save(conference);
   }
 
   async updateAsync(dto: ConferenceUpdateDto): Promise<void> {
-    const existing = await this.conferenceRepository.findOne({
+    const existing = await this.findOne({
       where: { id: dto.id },
     });
 
@@ -68,11 +61,11 @@ export class ConferencesRepository implements IRepository<
     }
 
     const entityData = updatedetailsDtoToConferenceEntity(dto);
-    const merged = this.conferenceRepository.merge(existing, entityData);
-    await this.conferenceRepository.save(merged);
+    const merged = this.merge(existing, entityData);
+    await this.save(merged);
   }
 
   async deleteAsync(id: string): Promise<void> {
-    await this.conferenceRepository.delete(id);
+    await this.delete(id);
   }
 }

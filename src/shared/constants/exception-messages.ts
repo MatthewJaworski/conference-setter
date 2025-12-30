@@ -17,3 +17,5 @@ export const cannotDeleteHostMessage =
 export const speakerExistsMessage = 'The specified speaker does exists in the system already.';
 
 export const speakerNotExistsMessage = 'The specified speaker does not exists in the system.';
+
+export const emptyAgendaItemTitle = (id: string) => `Agenda item ${id} cannot have an empty title.`;

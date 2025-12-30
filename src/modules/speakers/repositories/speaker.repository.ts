@@ -1,7 +1,5 @@
-import { IRepository } from '@/shared/interfaces/repository/repository';
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { v4 } from 'uuid';
 import { SpeakerEntity } from '../entities/speaker.entity';
 import { CreateSpeakerDto } from '../dtos/create-speaker.dto';
@@ -12,16 +10,12 @@ import {
 } from '../mappers/speaker.mapper';
 import { SpeakerDto } from '../dtos/speaker.dto';
 import { UpdateSpeakerDto } from '../dtos/update-speaker.dto';
-import { SearchByEmail } from '@/shared/interfaces/repository/searchByEmail';
 
 @Injectable()
-export class SpeakerRepository
-  implements IRepository<SpeakerDto, UpdateSpeakerDto, SpeakerDto>, SearchByEmail<SpeakerDto>
-{
-  constructor(
-    @InjectRepository(SpeakerEntity)
-    private readonly speakerRepository: Repository<SpeakerEntity>,
-  ) {}
+export class SpeakerRepository extends Repository<SpeakerEntity> {
+  constructor(private readonly dataSource: DataSource) {
+    super(SpeakerEntity, dataSource.createEntityManager());
+  }
 
   async addAsync(dto: CreateSpeakerDto): Promise<void> {
     const id = v4();
@@ -31,12 +25,12 @@ export class SpeakerRepository
       ...speakerData,
       id,
     };
-    const speaker = this.speakerRepository.create(speakerToAdd);
-    await this.speakerRepository.save(speaker);
+    const speaker = this.create(speakerToAdd);
+    await this.save(speaker);
   }
 
   async getAsync(id: string): Promise<SpeakerDto | null> {
-    const speaker = await this.speakerRepository.findOne({
+    const speaker = await this.findOne({
       where: { id },
     });
     if (!speaker) {
@@ -46,28 +40,28 @@ export class SpeakerRepository
   }
 
   async browseAsync(): Promise<SpeakerDto[]> {
-    const speakers = await this.speakerRepository.find();
+    const speakers = await this.find();
     return speakers.map(speakerToDto);
   }
 
   async updateAsync(dto: UpdateSpeakerDto): Promise<void> {
-    const existing = await this.speakerRepository.findOne({
+    const existing = await this.findOne({
       where: { id: dto.id },
     });
     if (!existing) {
       return;
     }
     const entityData = updateDtoToSpeakerEntity(dto);
-    const merged = this.speakerRepository.merge(existing, entityData);
-    await this.speakerRepository.save(merged);
+    const merged = this.merge(existing, entityData);
+    await this.save(merged);
   }
 
   async deleteAsync(id: string): Promise<void> {
-    await this.speakerRepository.delete(id);
+    await this.delete(id);
   }
 
   async getByEmailAsync(email: string): Promise<SpeakerDto | null> {
-    const speaker = await this.speakerRepository.findOne({
+    const speaker = await this.findOne({
       where: { email },
     });
     if (!speaker) {
