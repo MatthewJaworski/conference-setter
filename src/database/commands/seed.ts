@@ -6,6 +6,8 @@ import { ConferenceEntity } from '@/modules/conferences/entities/conference.enti
 import { HostEntity } from '@/modules/conferences/entities/host.entity';
 import { mockHosts } from '@/shared/mocks/hosts.mock';
 import { mockConferences } from '@/shared/mocks/conferences.mock';
+import { SpeakerEntity } from '@/modules/speakers/entities/speaker.entity';
+import { mockSpeakers } from '@/shared/mocks/speakers.mock';
 
 (async function main() {
   const logger = new Logger('DatabaseSeed');
@@ -15,7 +17,7 @@ import { mockConferences } from '@/shared/mocks/conferences.mock';
 
   const dataSource = new DataSource({
     ...dbConfig,
-    entities: [HostEntity, ConferenceEntity],
+    entities: [HostEntity, ConferenceEntity, SpeakerEntity],
   } as DataSourceOptions);
 
   try {
@@ -24,10 +26,12 @@ import { mockConferences } from '@/shared/mocks/conferences.mock';
 
     const hostRepository = dataSource.getRepository(HostEntity);
     const conferenceRepository = dataSource.getRepository(ConferenceEntity);
+    const speakerRepository = dataSource.getRepository(SpeakerEntity);
 
     // Clear existing data (delete all records respecting foreign key constraints)
     await conferenceRepository.createQueryBuilder().delete().execute();
     await hostRepository.createQueryBuilder().delete().execute();
+    await speakerRepository.createQueryBuilder().delete().execute();
     logger.log('Cleared existing data');
 
     // Create hosts from mock data
@@ -46,9 +50,16 @@ import { mockConferences } from '@/shared/mocks/conferences.mock';
         });
       }),
     );
+    // Create speakers from mock data
+    const speakers = await speakerRepository.save(
+      mockSpeakers.map((speakerData) => speakerRepository.create(speakerData)),
+    );
+    logger.log(`Created ${speakers.length} speakers`);
     logger.log(`Created ${conferences.length} conferences`);
-
     logger.log('\nSeed data summary:');
+    logger.log(`- ${await hostRepository.count()} hosts`);
+    logger.log(`- ${await conferenceRepository.count()} conferences`);
+    logger.log(`- ${await speakerRepository.count()} speakers`);
     logger.log(`- ${await hostRepository.count()} hosts`);
     logger.log(`- ${await conferenceRepository.count()} conferences`);
     logger.log('\nDatabase seeding completed successfully!');

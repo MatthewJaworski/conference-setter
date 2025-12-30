@@ -5,6 +5,7 @@ import { TypeOrmAsyncOptions } from './database/database-config.provider';
 import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ConferencesModule } from './modules/conferences/conferences.module';
+import { SpeakersModule } from './modules/speakers/speakers.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { ConferencesModule } from './modules/conferences/conferences.module';
     HealthModule,
     AuthModule,
     ConferencesModule,
+    SpeakersModule,
   ],
   controllers: [],
   providers: [],

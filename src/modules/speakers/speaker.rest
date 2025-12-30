@@ -1,0 +1,40 @@
+@url = http://localhost:3000
+@speakerId = 98f2898e-5f17-4329-af7a-116f1c853bca
+@userId = dev-user-123
+
+###
+GET {{url}}/speakers
+
+###
+GET {{url}}/speakers/{{speakerId}}
+x-id-claim: {{userId}}
+
+###
+POST {{url}}/speakers
+x-id-claim: {{userId}}
+Content-Type: application/json
+
+{
+  "id": "{{speakerId}}",
+  "email": "new.speaker@example.com",
+  "fullName": "New Speaker",
+  "bio": "A passionate speaker with expertise in modern technologies.",
+  "avatarUrl": "https://example.com/avatars/new-speaker.jpg"
+}
+
+###
+PUT {{url}}/speakers/{{speakerId}}
+x-id-claim: {{userId}}
+Content-Type: application/json
+
+{
+  "id": "{{speakerId}}",
+  "email": "sarah.johnson@techconf.com",
+  "fullName": "Sarah Johnson - Updated",
+  "bio": "Senior Software Architect with 15+ years of experience in cloud-native applications and microservices architecture.",
+  "avatarUrl": "https://example.com/avatars/sarah-johnson-updated.jpg"
+}
+
+###
+DELETE {{url}}/speakers/{{speakerId}}
+x-id-claim: {{userId}}

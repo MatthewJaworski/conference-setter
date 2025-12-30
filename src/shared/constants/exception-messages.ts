@@ -13,3 +13,7 @@ export const conferenceNotExistsMessage = 'The specified conference does not exi
 
 export const cannotDeleteHostMessage =
   'The host cannot be deleted because there are conferences associated with it.';
+
+export const speakerExistsMessage = 'The specified speaker does exists in the system already.';
+
+export const speakerNotExistsMessage = 'The specified speaker does not exists in the system.';
