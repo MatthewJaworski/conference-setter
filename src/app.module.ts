@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { TypeOrmAsyncOptions } from './database/database-config.provider';
 import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { ConferencesModule } from './modules/conferences/conferences.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { AuthModule } from './modules/auth/auth.module';
     TypeOrmModule.forRootAsync(TypeOrmAsyncOptions),
     HealthModule,
     AuthModule,
+    ConferencesModule,
   ],
   controllers: [],
   providers: [],

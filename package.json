@@ -18,7 +18,8 @@
     "test:watch": "dotenvx run -f .env.test -- jest --watch",
     "test:cov": "dotenvx run -f .env.test -- npm run test -- --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "database:seed": "dotenvx run -- node -r @swc-node/register src/database/commands/seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "11.0.12",

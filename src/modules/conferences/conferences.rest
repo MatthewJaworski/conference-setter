@@ -1,0 +1,62 @@
+@url = http://localhost:3000
+@hostId = 3d2afaf0-0ea2-4554-8f2e-d8f3690c7324
+@conferenceId = 6ad2a08b-6209-42e6-b1ac-e1daf0743238
+@userId = dev-user-123
+
+###
+GET {{url}}/conference
+x-id-claim: {{userId}}
+
+
+###
+GET {{url}}/host/{{hostId}}
+x-id-claim: {{userId}}
+Content-Type: application/json
+
+{
+  "name": "Host #1"
+}
+
+###
+DELETE {{url}}/host/{{hostId}}
+x-id-claim: {{userId}}
+
+###
+GET {{url}}/conference
+x-id-claim: {{userId}}
+
+###
+GET {{url}}/conference/{{conferenceId}}
+x-id-claim: {{userId}}
+
+###
+PUT {{url}}/conference/{{conferenceId}}
+x-id-claim: {{userId}}
+Content-Type: application/json
+
+{
+  "id": "{{conferenceId}}",
+  "name": "Conference #2",
+  "description": "Lorem ipsum",
+  "location": "Test 123",
+  "from": "2021-05-01",
+  "to": "2021-05-02",
+  "participantsLimit": 100,
+  "logoUrl": null
+}
+
+###
+POST {{url}}/conference
+x-id-claim: {{userId}}
+Content-Type: application/json
+
+{
+  "hostId": "{{hostId}}",
+  "name": "Conference #111",
+  "description": "Lorem ipsum",
+  "location": "Test 123",
+  "from": "2021-05-01",
+  "to": "2021-05-02",
+  "participantsLimit": 100,
+  "logoUrl": null
+}
