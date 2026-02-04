@@ -9,7 +9,7 @@ describe('bypassAuthentication', () => {
 
   describe('Non-production environments', () => {
     test('Without APP_BYPASS_AUTH set, do not bypass authentication', () => {
-      const config = setupConfig({ NODE_ENV: 'dev' });
+      const config = setupConfig({ NODE_ENV: 'dev', APP_BYPASS_AUTH: '' });
       expect(bypassAuthentication(config)).toBe(false);
     });
 

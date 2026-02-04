@@ -29,7 +29,7 @@ describe('SecurityGuard', () => {
   }
 
   test('Provides an instance of AuthGuard for normal authentication', async () => {
-    expect(await constructGuard({})).toBeInstanceOf(AuthGuard);
+    expect(await constructGuard({ APP_BYPASS_AUTH: 'false' })).toBeInstanceOf(AuthGuard);
   });
 
   test('Provides an instance of DevelopmentGuard when bypass is active', async () => {

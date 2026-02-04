@@ -22,6 +22,7 @@ export default tseslint.config(
       eslint.configs.recommended,
       ...tseslint.configs.recommendedTypeChecked,
       commentsPlugin.recommended,
+      // @ts-ignore
       promisePlugin.configs['flat/recommended'],
       importPlugin.flatConfigs.errors,
       importPlugin.flatConfigs.warnings,
