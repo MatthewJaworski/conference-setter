@@ -23,15 +23,12 @@ describe('AgendaItemRepository', () => {
   };
 
   beforeEach(() => {
-    // Create a minimal mock DataSource
     const mockDataSource = {
       createEntityManager: jest.fn().mockReturnValue({}),
     } as unknown as DataSource;
 
     repository = new AgendaItemRepository(mockDataSource);
 
-    // Mock inherited Repository methods - these are the "external" dependencies
-    // We're testing how our repository uses these methods, not the methods themselves
     jest.spyOn(repository, 'create').mockImplementation((data) => data as AgendaItemEntity);
     jest.spyOn(repository, 'save').mockResolvedValue(existingEntity);
     jest.spyOn(repository, 'findOne').mockResolvedValue(existingEntity);

@@ -78,18 +78,16 @@ export class DevelopmentGuard implements CanActivate {
     const request = context.switchToHttp()?.getRequest<Request>();
 
     if (request) {
-      const id = request.header('x-id-claim');
+      const id = request.header('x-id-claim') ?? 'dev-user';
 
-      if (id) {
-        request.auth = {
-          payload: {
-            ['id']: id,
-          },
-          header: {},
-          token: '',
-        };
-        return true;
-      }
+      request.auth = {
+        payload: {
+          ['id']: id,
+        },
+        header: {},
+        token: '',
+      };
+      return true;
     }
 
     return await this.regularGuard.canActivate(context);
