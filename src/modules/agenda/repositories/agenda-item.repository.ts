@@ -40,8 +40,9 @@ export class AgendaItemRepository extends Repository<AgendaItemEntity> {
     return agendaItemToDto(agendaItem);
   }
 
-  async browseAsync(): Promise<AgendaItemDto[]> {
-    const agendaItems = await this.find();
+  async browseAsync(conferenceId?: string): Promise<AgendaItemDto[]> {
+    const where = conferenceId ? { conferenceId } : {};
+    const agendaItems = await this.find({ where });
     return agendaItems.map(agendaItemToDto);
   }
 

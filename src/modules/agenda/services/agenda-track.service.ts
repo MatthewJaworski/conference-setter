@@ -18,8 +18,8 @@ export class AgendaTrackService {
     return track;
   }
 
-  async browseAsync(): Promise<AgendaTrackDto[]> {
-    return await this.agendaTrackRepository.browseAsync();
+  async browseAsync(conferenceId?: string): Promise<AgendaTrackDto[]> {
+    return await this.agendaTrackRepository.browseAsync(conferenceId);
   }
 
   async addAsync(dto: CreateAgendaTrackDto): Promise<void> {

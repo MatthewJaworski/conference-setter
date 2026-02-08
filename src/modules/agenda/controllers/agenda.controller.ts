@@ -26,7 +26,7 @@ import { Public } from '../../auth/public.decorator';
 
 @EnableSwaggerAuth()
 @ApiTags('agenda')
-@Controller('agenda/conferences/:conferenceId')
+@Controller('agenda')
 export class AgendaController {
   constructor(
     private readonly agendaService: AgendaService,
@@ -41,18 +41,20 @@ export class AgendaController {
     return await this.agendaTrackService.getAsync(id);
   }
 
-  @Get('tracks')
+  @Get('conferences/:conferenceId/tracks')
   @Public()
   @ApiOkResponse({ description: 'Agenda tracks retrieved', type: [AgendaTrackDto] })
-  async getAgendaAsync(): Promise<AgendaTrackDto[]> {
-    return await this.agendaTrackService.browseAsync();
+  async getAgendaAsync(@Param('conferenceId') conferenceId: string): Promise<AgendaTrackDto[]> {
+    return await this.agendaTrackService.browseAsync(conferenceId);
   }
 
-  @Get('items')
+  @Get('conferences/:conferenceId/items')
   @Public()
   @ApiOkResponse({ description: 'Agenda items retrieved', type: [AgendaItemDto] })
-  async browseAgendaItemsAsync(): Promise<AgendaItemDto[]> {
-    return await this.agendaItemService.browseAsync();
+  async browseAgendaItemsAsync(
+    @Param('conferenceId') conferenceId: string,
+  ): Promise<AgendaItemDto[]> {
+    return await this.agendaItemService.browseAsync(conferenceId);
   }
 
   @Get('items/:id')
@@ -62,7 +64,7 @@ export class AgendaController {
     return await this.agendaItemService.getAsync(id);
   }
 
-  @Post('tracks')
+  @Post('conferences/:conferenceId/tracks')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiNoContentResponse({ description: 'Agenda track created' })
   async createAgendaTrackAsync(

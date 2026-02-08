@@ -19,8 +19,8 @@ export class AgendaItemService {
     return item;
   }
 
-  async browseAsync(): Promise<AgendaItemDto[]> {
-    return await this.agendaItemRepository.browseAsync();
+  async browseAsync(conferenceId?: string): Promise<AgendaItemDto[]> {
+    return await this.agendaItemRepository.browseAsync(conferenceId);
   }
 
   async addAsync(dto: CreateAgendaItemDto): Promise<void> {

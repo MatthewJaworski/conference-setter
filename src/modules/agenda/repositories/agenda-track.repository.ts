@@ -47,8 +47,9 @@ export class AgendaTrackRepository extends Repository<AgendaTrackEntity> {
     return agendaTrackToDto(agendaTrack);
   }
 
-  async browseAsync(): Promise<AgendaTrackDto[]> {
-    const agendaTracks = await this.find();
+  async browseAsync(conferenceId?: string): Promise<AgendaTrackDto[]> {
+    const where = conferenceId ? { conferenceId } : {};
+    const agendaTracks = await this.find({ where });
     return agendaTracks.map(agendaTrackToDto);
   }
 

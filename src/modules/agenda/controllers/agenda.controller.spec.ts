@@ -95,40 +95,46 @@ describe('AgendaController', () => {
   });
 
   describe('getAgendaAsync', () => {
-    it('should return all agenda tracks', async () => {
+    it('should return all agenda tracks for a conference', async () => {
       const mockTracks = [mockAgendaTrack, { ...mockAgendaTrack, id: 'track-2', name: 'Room A' }];
+      const conferenceId = '123e4567-e89b-12d3-a456-426614174001';
       agendaTrackService.browseAsync.mockResolvedValue(mockTracks);
 
-      const result = await controller.getAgendaAsync();
+      const result = await controller.getAgendaAsync(conferenceId);
 
       expect(result).toEqual(mockTracks);
+      expect(agendaTrackService.browseAsync).toHaveBeenCalledWith(conferenceId);
       expect(agendaTrackService.browseAsync).toHaveBeenCalledTimes(1);
     });
 
     it('should return empty array when no tracks exist', async () => {
+      const conferenceId = '123e4567-e89b-12d3-a456-426614174001';
       agendaTrackService.browseAsync.mockResolvedValue([]);
 
-      const result = await controller.getAgendaAsync();
+      const result = await controller.getAgendaAsync(conferenceId);
 
       expect(result).toEqual([]);
     });
   });
 
   describe('browseAgendaItemsAsync', () => {
-    it('should return all agenda items', async () => {
+    it('should return all agenda items for a conference', async () => {
       const mockItems = [mockAgendaItem, { ...mockAgendaItem, id: 'item-2', title: 'Workshop' }];
+      const conferenceId = '123e4567-e89b-12d3-a456-426614174001';
       agendaItemService.browseAsync.mockResolvedValue(mockItems);
 
-      const result = await controller.browseAgendaItemsAsync();
+      const result = await controller.browseAgendaItemsAsync(conferenceId);
 
       expect(result).toEqual(mockItems);
+      expect(agendaItemService.browseAsync).toHaveBeenCalledWith(conferenceId);
       expect(agendaItemService.browseAsync).toHaveBeenCalledTimes(1);
     });
 
     it('should return empty array when no items exist', async () => {
+      const conferenceId = '123e4567-e89b-12d3-a456-426614174001';
       agendaItemService.browseAsync.mockResolvedValue([]);
 
-      const result = await controller.browseAgendaItemsAsync();
+      const result = await controller.browseAgendaItemsAsync(conferenceId);
 
       expect(result).toEqual([]);
     });
