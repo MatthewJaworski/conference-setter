@@ -1,72 +1,48 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { DataSource, EntityManager } from 'typeorm';
+import { DataSource } from 'typeorm';
 import { HostsRepository } from './host.repository';
 import { HostEntity } from '../entities/host.entity';
 import { HostCreateDto } from '../dtos/host-create.dto';
 import { HostDetailsDto } from '../dtos/host-detials.dto';
 
 jest.mock('uuid', () => ({
-  v4: jest.fn().mockReturnValue('test-uuid-123'),
+  v4: jest.fn().mockReturnValue('generated-uuid-123'),
 }));
 
+/**
+ * Tests verify HostsRepository's logic:
+ * - UUID generation for new hosts
+ * - Query building with correct where clauses and relations
+ * - Entity-to-DTO mapping
+ */
 describe('HostsRepository', () => {
   let repository: HostsRepository;
-  let mockEntityManager: Partial<EntityManager>;
-  let mockDataSource: Partial<DataSource>;
 
-  const mockHostEntity: HostEntity = {
-    id: 'test-uuid-123',
+  const existingEntity: HostEntity = {
+    id: 'existing-uuid-123',
     name: 'Tech Corp',
     description: 'Technology company',
     conferences: [],
   };
 
-  beforeEach(async () => {
-    mockEntityManager = {
-      findOne: jest.fn(),
-      find: jest.fn(),
-      save: jest.fn(),
-      delete: jest.fn(),
-      create: jest.fn(),
-      merge: jest.fn(),
-    };
+  beforeEach(() => {
+    const mockDataSource = {
+      createEntityManager: jest.fn().mockReturnValue({}),
+    } as unknown as DataSource;
 
-    mockDataSource = {
-      createEntityManager: jest.fn().mockReturnValue(mockEntityManager),
-    };
+    repository = new HostsRepository(mockDataSource);
 
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        HostsRepository,
-        {
-          provide: DataSource,
-          useValue: mockDataSource,
-        },
-      ],
-    }).compile();
-
-    repository = module.get<HostsRepository>(HostsRepository);
-
-    jest.spyOn(repository, 'create').mockImplementation((entity) => entity as HostEntity);
-    jest.spyOn(repository, 'save').mockResolvedValue(mockHostEntity);
-    jest.spyOn(repository, 'findOne').mockResolvedValue(mockHostEntity);
-    jest.spyOn(repository, 'find').mockResolvedValue([mockHostEntity]);
+    jest.spyOn(repository, 'create').mockImplementation((data) => data as HostEntity);
+    jest.spyOn(repository, 'save').mockResolvedValue(existingEntity);
+    jest.spyOn(repository, 'findOne').mockResolvedValue(existingEntity);
+    jest.spyOn(repository, 'find').mockResolvedValue([existingEntity]);
     jest.spyOn(repository, 'delete').mockResolvedValue({ affected: 1, raw: {} });
-    jest.spyOn(repository, 'merge').mockImplementation(
-      (entity, data) =>
-        ({
-          ...entity,
-          ...data,
-        }) as HostEntity,
-    );
+    jest.spyOn(repository, 'merge').mockImplementation((entity, ...sources) => {
+      return Object.assign({}, entity, ...sources) as HostEntity;
+    });
   });
 
   afterEach(() => {
     jest.clearAllMocks();
-  });
-
-  it('should be defined', () => {
-    expect(repository).toBeDefined();
   });
 
   describe('addAsync', () => {
@@ -75,37 +51,48 @@ describe('HostsRepository', () => {
       description: 'New host description',
     };
 
-    it('should add host with generated UUID', async () => {
-      await repository.addAsync(createDto);
-
-      expect(repository.create).toHaveBeenCalled();
-      expect(repository.save).toHaveBeenCalled();
-    });
-
-    it('should create host with correct id', async () => {
+    it('should generate UUID for new host', async () => {
       await repository.addAsync(createDto);
 
       expect(repository.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          id: 'test-uuid-123',
+          id: 'generated-uuid-123',
         }),
       );
+    });
+
+    it('should map all DTO fields to entity', async () => {
+      await repository.addAsync(createDto);
+
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'New Host',
+          description: 'New host description',
+        }),
+      );
+      expect(repository.save).toHaveBeenCalled();
     });
   });
 
   describe('getAsync', () => {
-    it('should return host DTO when found', async () => {
-      const result = await repository.getAsync('test-uuid-123');
+    it('should query by id with conferences relation', async () => {
+      await repository.getAsync('existing-uuid-123');
 
       expect(repository.findOne).toHaveBeenCalledWith({
-        where: { id: 'test-uuid-123' },
+        where: { id: 'existing-uuid-123' },
         relations: ['conferences'],
       });
-      expect(result).toBeDefined();
-      expect(result?.id).toBe('test-uuid-123');
     });
 
-    it('should return null when host not found', async () => {
+    it('should map entity to DTO when found', async () => {
+      const result = await repository.getAsync('existing-uuid-123');
+
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe('existing-uuid-123');
+      expect(result?.name).toBe('Tech Corp');
+    });
+
+    it('should return null when entity not found', async () => {
       jest.spyOn(repository, 'findOne').mockResolvedValue(null);
 
       const result = await repository.getAsync('non-existent-id');
@@ -115,11 +102,24 @@ describe('HostsRepository', () => {
   });
 
   describe('browseAsync', () => {
-    it('should return all hosts as DTOs', async () => {
-      const result = await repository.browseAsync();
+    it('should query with conferences relation', async () => {
+      await repository.browseAsync();
 
       expect(repository.find).toHaveBeenCalledWith({ relations: ['conferences'] });
-      expect(result).toHaveLength(1);
+    });
+
+    it('should map all entities to DTOs', async () => {
+      const multipleEntities = [
+        existingEntity,
+        { ...existingEntity, id: 'second-id', name: 'Another Host' },
+      ];
+      jest.spyOn(repository, 'find').mockResolvedValue(multipleEntities);
+
+      const result = await repository.browseAsync();
+
+      expect(result).toHaveLength(2);
+      expect(result[0].name).toBe('Tech Corp');
+      expect(result[1].name).toBe('Another Host');
     });
 
     it('should return empty array when no hosts exist', async () => {
@@ -133,23 +133,33 @@ describe('HostsRepository', () => {
 
   describe('updateAsync', () => {
     const updateDto: HostDetailsDto = {
-      id: 'test-uuid-123',
+      id: 'existing-uuid-123',
       name: 'Updated Host Name',
       description: 'Updated description',
       conferences: [],
     };
 
-    it('should update host when exists', async () => {
+    it('should query for existing entity before updating', async () => {
       await repository.updateAsync(updateDto);
 
       expect(repository.findOne).toHaveBeenCalledWith({
-        where: { id: updateDto.id },
+        where: { id: 'existing-uuid-123' },
       });
-      expect(repository.merge).toHaveBeenCalled();
+    });
+
+    it('should merge update data with existing entity', async () => {
+      await repository.updateAsync(updateDto);
+
+      expect(repository.merge).toHaveBeenCalledWith(
+        existingEntity,
+        expect.objectContaining({
+          name: 'Updated Host Name',
+        }),
+      );
       expect(repository.save).toHaveBeenCalled();
     });
 
-    it('should not update when host not found', async () => {
+    it('should not save when entity not found', async () => {
       jest.spyOn(repository, 'findOne').mockResolvedValue(null);
 
       await repository.updateAsync(updateDto);
@@ -160,10 +170,10 @@ describe('HostsRepository', () => {
   });
 
   describe('deleteAsync', () => {
-    it('should delete host by id', async () => {
-      await repository.deleteAsync('test-uuid-123');
+    it('should delete by id', async () => {
+      await repository.deleteAsync('existing-uuid-123');
 
-      expect(repository.delete).toHaveBeenCalledWith('test-uuid-123');
+      expect(repository.delete).toHaveBeenCalledWith('existing-uuid-123');
     });
   });
 });

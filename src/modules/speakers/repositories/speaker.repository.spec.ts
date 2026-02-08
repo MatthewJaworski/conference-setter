@@ -1,72 +1,49 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { DataSource, EntityManager } from 'typeorm';
+import { DataSource } from 'typeorm';
 import { SpeakerRepository } from './speaker.repository';
 import { SpeakerEntity } from '../entities/speaker.entity';
 import { CreateSpeakerDto } from '../dtos/create-speaker.dto';
 import { UpdateSpeakerDto } from '../dtos/update-speaker.dto';
 
 jest.mock('uuid', () => ({
-  v4: jest.fn().mockReturnValue('test-uuid-123'),
+  v4: jest.fn().mockReturnValue('generated-uuid-123'),
 }));
 
+/**
+ * Tests verify SpeakerRepository's logic:
+ * - UUID generation for new speakers
+ * - Query building with correct where clauses
+ * - Entity-to-DTO mapping
+ * - getByEmailAsync query logic
+ */
 describe('SpeakerRepository', () => {
   let repository: SpeakerRepository;
-  let mockEntityManager: Partial<EntityManager>;
-  let mockDataSource: Partial<DataSource>;
 
-  const mockSpeakerEntity: SpeakerEntity = {
-    id: 'test-uuid-123',
+  const existingEntity: SpeakerEntity = {
+    id: 'existing-uuid-123',
     fullName: 'John Doe',
     email: 'john.doe@example.com',
     bio: 'Expert speaker',
   };
 
-  beforeEach(async () => {
-    mockEntityManager = {
-      findOne: jest.fn(),
-      find: jest.fn(),
-      save: jest.fn(),
-      delete: jest.fn(),
-      create: jest.fn(),
-      merge: jest.fn(),
-    };
+  beforeEach(() => {
+    const mockDataSource = {
+      createEntityManager: jest.fn().mockReturnValue({}),
+    } as unknown as DataSource;
 
-    mockDataSource = {
-      createEntityManager: jest.fn().mockReturnValue(mockEntityManager),
-    };
+    repository = new SpeakerRepository(mockDataSource);
 
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        SpeakerRepository,
-        {
-          provide: DataSource,
-          useValue: mockDataSource,
-        },
-      ],
-    }).compile();
-
-    repository = module.get<SpeakerRepository>(SpeakerRepository);
-
-    jest.spyOn(repository, 'create').mockImplementation((entity) => entity as SpeakerEntity);
-    jest.spyOn(repository, 'save').mockResolvedValue(mockSpeakerEntity);
-    jest.spyOn(repository, 'findOne').mockResolvedValue(mockSpeakerEntity);
-    jest.spyOn(repository, 'find').mockResolvedValue([mockSpeakerEntity]);
+    jest.spyOn(repository, 'create').mockImplementation((data) => data as SpeakerEntity);
+    jest.spyOn(repository, 'save').mockResolvedValue(existingEntity);
+    jest.spyOn(repository, 'findOne').mockResolvedValue(existingEntity);
+    jest.spyOn(repository, 'find').mockResolvedValue([existingEntity]);
     jest.spyOn(repository, 'delete').mockResolvedValue({ affected: 1, raw: {} });
-    jest.spyOn(repository, 'merge').mockImplementation(
-      (entity, data) =>
-        ({
-          ...entity,
-          ...data,
-        }) as SpeakerEntity,
-    );
+    jest.spyOn(repository, 'merge').mockImplementation((entity, ...sources) => {
+      return Object.assign({}, entity, ...sources) as SpeakerEntity;
+    });
   });
 
   afterEach(() => {
     jest.clearAllMocks();
-  });
-
-  it('should be defined', () => {
-    expect(repository).toBeDefined();
   });
 
   describe('addAsync', () => {
@@ -76,36 +53,48 @@ describe('SpeakerRepository', () => {
       bio: 'New speaker',
     };
 
-    it('should add speaker with generated UUID', async () => {
-      await repository.addAsync(createDto);
-
-      expect(repository.create).toHaveBeenCalled();
-      expect(repository.save).toHaveBeenCalled();
-    });
-
-    it('should create speaker with correct id', async () => {
+    it('should generate UUID for new speaker', async () => {
       await repository.addAsync(createDto);
 
       expect(repository.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          id: 'test-uuid-123',
+          id: 'generated-uuid-123',
         }),
       );
+    });
+
+    it('should map all DTO fields to entity', async () => {
+      await repository.addAsync(createDto);
+
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fullName: 'Jane Smith',
+          email: 'jane.smith@example.com',
+          bio: 'New speaker',
+        }),
+      );
+      expect(repository.save).toHaveBeenCalled();
     });
   });
 
   describe('getAsync', () => {
-    it('should return speaker DTO when found', async () => {
-      const result = await repository.getAsync('test-uuid-123');
+    it('should query by id with correct where clause', async () => {
+      await repository.getAsync('existing-uuid-123');
 
       expect(repository.findOne).toHaveBeenCalledWith({
-        where: { id: 'test-uuid-123' },
+        where: { id: 'existing-uuid-123' },
       });
-      expect(result).toBeDefined();
-      expect(result?.id).toBe('test-uuid-123');
     });
 
-    it('should return null when speaker not found', async () => {
+    it('should map entity to DTO when found', async () => {
+      const result = await repository.getAsync('existing-uuid-123');
+
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe('existing-uuid-123');
+      expect(result?.fullName).toBe('John Doe');
+    });
+
+    it('should return null when entity not found', async () => {
       jest.spyOn(repository, 'findOne').mockResolvedValue(null);
 
       const result = await repository.getAsync('non-existent-id');
@@ -115,11 +104,25 @@ describe('SpeakerRepository', () => {
   });
 
   describe('browseAsync', () => {
-    it('should return all speakers as DTOs', async () => {
+    it('should return all speakers', async () => {
       const result = await repository.browseAsync();
 
       expect(repository.find).toHaveBeenCalled();
       expect(result).toHaveLength(1);
+    });
+
+    it('should map all entities to DTOs', async () => {
+      const multipleEntities = [
+        existingEntity,
+        { ...existingEntity, id: 'second-id', fullName: 'Jane Smith' },
+      ];
+      jest.spyOn(repository, 'find').mockResolvedValue(multipleEntities);
+
+      const result = await repository.browseAsync();
+
+      expect(result).toHaveLength(2);
+      expect(result[0].fullName).toBe('John Doe');
+      expect(result[1].fullName).toBe('Jane Smith');
     });
 
     it('should return empty array when no speakers exist', async () => {
@@ -133,21 +136,31 @@ describe('SpeakerRepository', () => {
 
   describe('updateAsync', () => {
     const updateDto: UpdateSpeakerDto = {
-      id: 'test-uuid-123',
+      id: 'existing-uuid-123',
       fullName: 'Updated Name',
     };
 
-    it('should update speaker when exists', async () => {
+    it('should query for existing entity before updating', async () => {
       await repository.updateAsync(updateDto);
 
       expect(repository.findOne).toHaveBeenCalledWith({
-        where: { id: updateDto.id },
+        where: { id: 'existing-uuid-123' },
       });
-      expect(repository.merge).toHaveBeenCalled();
+    });
+
+    it('should merge update data with existing entity', async () => {
+      await repository.updateAsync(updateDto);
+
+      expect(repository.merge).toHaveBeenCalledWith(
+        existingEntity,
+        expect.objectContaining({
+          fullName: 'Updated Name',
+        }),
+      );
       expect(repository.save).toHaveBeenCalled();
     });
 
-    it('should not update when speaker not found', async () => {
+    it('should not save when entity not found', async () => {
       jest.spyOn(repository, 'findOne').mockResolvedValue(null);
 
       await repository.updateAsync(updateDto);
@@ -158,22 +171,28 @@ describe('SpeakerRepository', () => {
   });
 
   describe('deleteAsync', () => {
-    it('should delete speaker by id', async () => {
-      await repository.deleteAsync('test-uuid-123');
+    it('should delete by id', async () => {
+      await repository.deleteAsync('existing-uuid-123');
 
-      expect(repository.delete).toHaveBeenCalledWith('test-uuid-123');
+      expect(repository.delete).toHaveBeenCalledWith('existing-uuid-123');
     });
   });
 
   describe('getByEmailAsync', () => {
-    it('should return speaker DTO when found by email', async () => {
-      const result = await repository.getByEmailAsync('john.doe@example.com');
+    it('should query by email with correct where clause', async () => {
+      await repository.getByEmailAsync('john.doe@example.com');
 
       expect(repository.findOne).toHaveBeenCalledWith({
         where: { email: 'john.doe@example.com' },
       });
-      expect(result).toBeDefined();
+    });
+
+    it('should map entity to DTO when found by email', async () => {
+      const result = await repository.getByEmailAsync('john.doe@example.com');
+
+      expect(result).not.toBeNull();
       expect(result?.email).toBe('john.doe@example.com');
+      expect(result?.fullName).toBe('John Doe');
     });
 
     it('should return null when speaker not found by email', async () => {

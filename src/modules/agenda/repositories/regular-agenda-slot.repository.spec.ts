@@ -1,21 +1,24 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { DataSource, EntityManager } from 'typeorm';
+import { DataSource } from 'typeorm';
 import { RegularAgendaSlotRepository } from './regular-agenda-slot.repository';
 import { RegularAgendaSlotEntity } from '../entities/regular-agenda-slot.entity';
 import { CreateRegularAgendaSlotDto } from '../dtos/create-regular-agenda-slot.dto';
 import { UpdateRegularAgendaSlotDto } from '../dtos/update-regular-agenda-slot.dto';
 
 jest.mock('uuid', () => ({
-  v4: jest.fn().mockReturnValue('test-uuid-123'),
+  v4: jest.fn().mockReturnValue('generated-uuid-123'),
 }));
 
+/**
+ * Tests verify RegularAgendaSlotRepository's logic:
+ * - UUID generation for new slots
+ * - Query building, entity-to-DTO mapping
+ * - Handling optional fields (participantsLimit, agendaItemId)
+ */
 describe('RegularAgendaSlotRepository', () => {
   let repository: RegularAgendaSlotRepository;
-  let mockEntityManager: Partial<EntityManager>;
-  let mockDataSource: Partial<DataSource>;
 
-  const mockRegularSlotEntity: RegularAgendaSlotEntity = {
-    id: 'test-uuid-123',
+  const existingEntity: RegularAgendaSlotEntity = {
+    id: 'existing-uuid-123',
     from: new Date('2024-01-15T10:00:00Z'),
     to: new Date('2024-01-15T11:00:00Z'),
     trackId: 'track-uuid-123',
@@ -23,54 +26,25 @@ describe('RegularAgendaSlotRepository', () => {
     agendaItemId: 'agenda-item-uuid-123',
   };
 
-  beforeEach(async () => {
-    mockEntityManager = {
-      findOne: jest.fn(),
-      find: jest.fn(),
-      save: jest.fn(),
-      delete: jest.fn(),
-      create: jest.fn(),
-      merge: jest.fn(),
-    };
+  beforeEach(() => {
+    const mockDataSource = {
+      createEntityManager: jest.fn().mockReturnValue({}),
+    } as unknown as DataSource;
 
-    mockDataSource = {
-      createEntityManager: jest.fn().mockReturnValue(mockEntityManager),
-    };
+    repository = new RegularAgendaSlotRepository(mockDataSource);
 
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        RegularAgendaSlotRepository,
-        {
-          provide: DataSource,
-          useValue: mockDataSource,
-        },
-      ],
-    }).compile();
-
-    repository = module.get<RegularAgendaSlotRepository>(RegularAgendaSlotRepository);
-
-    jest
-      .spyOn(repository, 'create')
-      .mockImplementation((entity) => entity as RegularAgendaSlotEntity);
-    jest.spyOn(repository, 'save').mockResolvedValue(mockRegularSlotEntity);
-    jest.spyOn(repository, 'findOne').mockResolvedValue(mockRegularSlotEntity);
-    jest.spyOn(repository, 'find').mockResolvedValue([mockRegularSlotEntity]);
+    jest.spyOn(repository, 'create').mockImplementation((data) => data as RegularAgendaSlotEntity);
+    jest.spyOn(repository, 'save').mockResolvedValue(existingEntity);
+    jest.spyOn(repository, 'findOne').mockResolvedValue(existingEntity);
+    jest.spyOn(repository, 'find').mockResolvedValue([existingEntity]);
     jest.spyOn(repository, 'delete').mockResolvedValue({ affected: 1, raw: {} });
-    jest.spyOn(repository, 'merge').mockImplementation(
-      (entity, data) =>
-        ({
-          ...entity,
-          ...data,
-        }) as RegularAgendaSlotEntity,
-    );
+    jest.spyOn(repository, 'merge').mockImplementation((entity, ...sources) => {
+      return Object.assign({}, entity, ...sources) as RegularAgendaSlotEntity;
+    });
   });
 
   afterEach(() => {
     jest.clearAllMocks();
-  });
-
-  it('should be defined', () => {
-    expect(repository).toBeDefined();
   });
 
   describe('addAsync', () => {
@@ -82,24 +56,29 @@ describe('RegularAgendaSlotRepository', () => {
       agendaItemId: 'agenda-item-uuid-123',
     };
 
-    it('should add regular slot with generated UUID', async () => {
-      await repository.addAsync(createDto);
-
-      expect(repository.create).toHaveBeenCalled();
-      expect(repository.save).toHaveBeenCalled();
-    });
-
-    it('should create slot with correct id', async () => {
+    it('should generate UUID for new slot', async () => {
       await repository.addAsync(createDto);
 
       expect(repository.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          id: 'test-uuid-123',
+          id: 'generated-uuid-123',
         }),
       );
     });
 
-    it('should add regular slot without optional fields', async () => {
+    it('should map all DTO fields to entity', async () => {
+      await repository.addAsync(createDto);
+
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          trackId: 'track-uuid-123',
+          participantsLimit: 50,
+        }),
+      );
+      expect(repository.save).toHaveBeenCalled();
+    });
+
+    it('should handle slot without optional fields', async () => {
       const dtoWithoutOptional: CreateRegularAgendaSlotDto = {
         from: '2024-01-15T10:00:00Z',
         to: '2024-01-15T11:00:00Z',
@@ -114,18 +93,23 @@ describe('RegularAgendaSlotRepository', () => {
   });
 
   describe('getAsync', () => {
-    it('should return regular slot when found', async () => {
-      const result = await repository.getAsync('test-uuid-123');
+    it('should query by id with correct where clause', async () => {
+      await repository.getAsync('existing-uuid-123');
 
       expect(repository.findOne).toHaveBeenCalledWith({
-        where: { id: 'test-uuid-123' },
+        where: { id: 'existing-uuid-123' },
       });
-      expect(result).toBeDefined();
-      expect(result?.id).toBe('test-uuid-123');
+    });
+
+    it('should map entity to DTO when found', async () => {
+      const result = await repository.getAsync('existing-uuid-123');
+
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe('existing-uuid-123');
       expect(result?.participantsLimit).toBe(50);
     });
 
-    it('should return null when regular slot not found', async () => {
+    it('should return null when entity not found', async () => {
       jest.spyOn(repository, 'findOne').mockResolvedValue(null);
 
       const result = await repository.getAsync('non-existent-id');
@@ -135,11 +119,25 @@ describe('RegularAgendaSlotRepository', () => {
   });
 
   describe('browseAsync', () => {
-    it('should return all regular slots', async () => {
+    it('should return all slots', async () => {
       const result = await repository.browseAsync();
 
       expect(repository.find).toHaveBeenCalled();
       expect(result).toHaveLength(1);
+    });
+
+    it('should map all entities to DTOs', async () => {
+      const multipleEntities = [
+        existingEntity,
+        { ...existingEntity, id: 'second-id', participantsLimit: 100 },
+      ];
+      jest.spyOn(repository, 'find').mockResolvedValue(multipleEntities);
+
+      const result = await repository.browseAsync();
+
+      expect(result).toHaveLength(2);
+      expect(result[0].participantsLimit).toBe(50);
+      expect(result[1].participantsLimit).toBe(100);
     });
 
     it('should return empty array when no slots exist', async () => {
@@ -153,21 +151,26 @@ describe('RegularAgendaSlotRepository', () => {
 
   describe('updateAsync', () => {
     const updateDto: UpdateRegularAgendaSlotDto = {
-      id: 'test-uuid-123',
+      id: 'existing-uuid-123',
       participantsLimit: 100,
     };
 
-    it('should update regular slot when exists', async () => {
+    it('should query for existing entity before updating', async () => {
       await repository.updateAsync(updateDto);
 
       expect(repository.findOne).toHaveBeenCalledWith({
-        where: { id: updateDto.id },
+        where: { id: 'existing-uuid-123' },
       });
+    });
+
+    it('should merge update data with existing entity', async () => {
+      await repository.updateAsync(updateDto);
+
       expect(repository.merge).toHaveBeenCalled();
       expect(repository.save).toHaveBeenCalled();
     });
 
-    it('should not update when regular slot not found', async () => {
+    it('should not save when entity not found', async () => {
       jest.spyOn(repository, 'findOne').mockResolvedValue(null);
 
       await repository.updateAsync(updateDto);
@@ -178,19 +181,23 @@ describe('RegularAgendaSlotRepository', () => {
 
     it('should update agendaItemId', async () => {
       const updateDtoWithAgendaItem: UpdateRegularAgendaSlotDto = {
-        id: 'test-uuid-123',
+        id: 'existing-uuid-123',
         agendaItemId: 'new-agenda-item-uuid',
       };
 
       await repository.updateAsync(updateDtoWithAgendaItem);
 
-      expect(repository.merge).toHaveBeenCalled();
-      expect(repository.save).toHaveBeenCalled();
+      expect(repository.merge).toHaveBeenCalledWith(
+        existingEntity,
+        expect.objectContaining({
+          agendaItemId: 'new-agenda-item-uuid',
+        }),
+      );
     });
 
     it('should update time fields', async () => {
       const updateDtoWithTime: UpdateRegularAgendaSlotDto = {
-        id: 'test-uuid-123',
+        id: 'existing-uuid-123',
         from: '2024-01-15T09:00:00Z',
         to: '2024-01-15T10:30:00Z',
       };
@@ -203,10 +210,10 @@ describe('RegularAgendaSlotRepository', () => {
   });
 
   describe('deleteAsync', () => {
-    it('should delete regular slot by id', async () => {
-      await repository.deleteAsync('test-uuid-123');
+    it('should delete by id', async () => {
+      await repository.deleteAsync('existing-uuid-123');
 
-      expect(repository.delete).toHaveBeenCalledWith('test-uuid-123');
+      expect(repository.delete).toHaveBeenCalledWith('existing-uuid-123');
     });
   });
 });

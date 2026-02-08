@@ -1,21 +1,30 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { DataSource, EntityManager } from 'typeorm';
+import { DataSource } from 'typeorm';
 import { AgendaItemRepository } from './agenda-item.repository';
 import { AgendaItemEntity } from '../entities/agenda-item.entity';
 import { CreateAgendaItemDto } from '../dtos/create-agenda-item.dto';
 import { UpdateAgendaItemDto } from '../dtos/update-agenda-item.dto';
 
+// Mock uuid to have predictable IDs
 jest.mock('uuid', () => ({
-  v4: jest.fn().mockReturnValue('test-uuid-123'),
+  v4: jest.fn().mockReturnValue('generated-uuid-123'),
 }));
 
+/**
+ * These tests verify that AgendaItemRepository correctly:
+ * - Generates UUIDs and sets initial version
+ * - Builds correct queries for TypeORM
+ * - Maps entities to DTOs
+ * - Increments version on updates
+ * - Handles not-found scenarios
+ *
+ * We mock the inherited Repository methods (save, findOne, etc.)
+ * to test the repository's own logic without hitting a real database.
+ */
 describe('AgendaItemRepository', () => {
   let repository: AgendaItemRepository;
-  let mockEntityManager: Partial<EntityManager>;
-  let mockDataSource: Partial<DataSource>;
 
-  const mockAgendaItemEntity: AgendaItemEntity = {
-    id: 'test-uuid-123',
+  const existingEntity: AgendaItemEntity = {
+    id: 'existing-uuid-123',
     conferenceId: 'conference-uuid-123',
     title: 'Opening Keynote',
     description: 'An introduction to the conference',
@@ -25,53 +34,28 @@ describe('AgendaItemRepository', () => {
     version: 0,
   };
 
-  beforeEach(async () => {
-    mockEntityManager = {
-      findOne: jest.fn(),
-      find: jest.fn(),
-      save: jest.fn(),
-      delete: jest.fn(),
-      create: jest.fn(),
-      merge: jest.fn(),
-    };
+  beforeEach(() => {
+    // Create a minimal mock DataSource
+    const mockDataSource = {
+      createEntityManager: jest.fn().mockReturnValue({}),
+    } as unknown as DataSource;
 
-    mockDataSource = {
-      createEntityManager: jest.fn().mockReturnValue(mockEntityManager),
-    };
+    repository = new AgendaItemRepository(mockDataSource);
 
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        AgendaItemRepository,
-        {
-          provide: DataSource,
-          useValue: mockDataSource,
-        },
-      ],
-    }).compile();
-
-    repository = module.get<AgendaItemRepository>(AgendaItemRepository);
-
-    // Mock repository methods
-    jest.spyOn(repository, 'create').mockImplementation((entity) => entity as AgendaItemEntity);
-    jest.spyOn(repository, 'save').mockResolvedValue(mockAgendaItemEntity);
-    jest.spyOn(repository, 'findOne').mockResolvedValue(mockAgendaItemEntity);
-    jest.spyOn(repository, 'find').mockResolvedValue([mockAgendaItemEntity]);
+    // Mock inherited Repository methods - these are the "external" dependencies
+    // We're testing how our repository uses these methods, not the methods themselves
+    jest.spyOn(repository, 'create').mockImplementation((data) => data as AgendaItemEntity);
+    jest.spyOn(repository, 'save').mockResolvedValue(existingEntity);
+    jest.spyOn(repository, 'findOne').mockResolvedValue(existingEntity);
+    jest.spyOn(repository, 'find').mockResolvedValue([existingEntity]);
     jest.spyOn(repository, 'delete').mockResolvedValue({ affected: 1, raw: {} });
-    jest.spyOn(repository, 'merge').mockImplementation(
-      (entity, data) =>
-        ({
-          ...entity,
-          ...data,
-        }) as AgendaItemEntity,
-    );
+    jest.spyOn(repository, 'merge').mockImplementation((entity, ...sources) => {
+      return Object.assign({}, entity, ...sources) as AgendaItemEntity;
+    });
   });
 
   afterEach(() => {
     jest.clearAllMocks();
-  });
-
-  it('should be defined', () => {
-    expect(repository).toBeDefined();
   });
 
   describe('addAsync', () => {
@@ -84,11 +68,14 @@ describe('AgendaItemRepository', () => {
       speakerIds: ['speaker-1'],
     };
 
-    it('should add agenda item with generated UUID', async () => {
+    it('should generate UUID for new item', async () => {
       await repository.addAsync(createDto);
 
-      expect(repository.create).toHaveBeenCalled();
-      expect(repository.save).toHaveBeenCalled();
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'generated-uuid-123',
+        }),
+      );
     });
 
     it('should set version to 0 for new item', async () => {
@@ -100,20 +87,41 @@ describe('AgendaItemRepository', () => {
         }),
       );
     });
+
+    it('should map all DTO fields to entity', async () => {
+      await repository.addAsync(createDto);
+
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'New Agenda Item',
+          description: 'Description',
+          level: 3,
+          conferenceId: 'conference-uuid-123',
+        }),
+      );
+      expect(repository.save).toHaveBeenCalled();
+    });
   });
 
   describe('getAsync', () => {
-    it('should return agenda item when found', async () => {
-      const result = await repository.getAsync('test-uuid-123');
+    it('should query by id with correct where clause', async () => {
+      await repository.getAsync('existing-uuid-123');
 
       expect(repository.findOne).toHaveBeenCalledWith({
-        where: { id: 'test-uuid-123' },
+        where: { id: 'existing-uuid-123' },
       });
-      expect(result).toBeDefined();
-      expect(result?.id).toBe('test-uuid-123');
     });
 
-    it('should return null when agenda item not found', async () => {
+    it('should map entity to DTO when found', async () => {
+      const result = await repository.getAsync('existing-uuid-123');
+
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe('existing-uuid-123');
+      expect(result?.title).toBe('Opening Keynote');
+      expect(result?.level).toBe(2);
+    });
+
+    it('should return null when entity not found', async () => {
       jest.spyOn(repository, 'findOne').mockResolvedValue(null);
 
       const result = await repository.getAsync('non-existent-id');
@@ -123,11 +131,34 @@ describe('AgendaItemRepository', () => {
   });
 
   describe('browseAsync', () => {
-    it('should return all agenda items', async () => {
+    it('should query without filter when no conferenceId provided', async () => {
+      await repository.browseAsync();
+
+      expect(repository.find).toHaveBeenCalledWith({
+        where: {},
+      });
+    });
+
+    it('should filter by conferenceId when provided', async () => {
+      await repository.browseAsync('conference-uuid-123');
+
+      expect(repository.find).toHaveBeenCalledWith({
+        where: { conferenceId: 'conference-uuid-123' },
+      });
+    });
+
+    it('should map all entities to DTOs', async () => {
+      const multipleEntities = [
+        existingEntity,
+        { ...existingEntity, id: 'second-id', title: 'Workshop' },
+      ];
+      jest.spyOn(repository, 'find').mockResolvedValue(multipleEntities);
+
       const result = await repository.browseAsync();
 
-      expect(repository.find).toHaveBeenCalled();
-      expect(result).toHaveLength(1);
+      expect(result).toHaveLength(2);
+      expect(result[0].title).toBe('Opening Keynote');
+      expect(result[1].title).toBe('Workshop');
     });
 
     it('should return empty array when no items exist', async () => {
@@ -141,32 +172,44 @@ describe('AgendaItemRepository', () => {
 
   describe('updateAsync', () => {
     const updateDto: UpdateAgendaItemDto = {
-      id: 'test-uuid-123',
+      id: 'existing-uuid-123',
       title: 'Updated Title',
       level: 4,
     };
 
-    it('should update agenda item when exists', async () => {
+    it('should query for existing entity before updating', async () => {
       await repository.updateAsync(updateDto);
 
       expect(repository.findOne).toHaveBeenCalledWith({
-        where: { id: updateDto.id },
+        where: { id: 'existing-uuid-123' },
       });
-      expect(repository.merge).toHaveBeenCalled();
-      expect(repository.save).toHaveBeenCalled();
     });
 
     it('should increment version on update', async () => {
+      const entityWithVersion5 = { ...existingEntity, version: 5 };
+      jest.spyOn(repository, 'findOne').mockResolvedValue(entityWithVersion5);
+
       await repository.updateAsync(updateDto);
 
       expect(repository.save).toHaveBeenCalledWith(
         expect.objectContaining({
-          version: 1,
+          version: 6,
         }),
       );
     });
 
-    it('should not update when agenda item not found', async () => {
+    it('should merge update data with existing entity', async () => {
+      await repository.updateAsync(updateDto);
+
+      expect(repository.merge).toHaveBeenCalledWith(
+        existingEntity,
+        expect.objectContaining({
+          title: 'Updated Title',
+        }),
+      );
+    });
+
+    it('should not save when entity not found', async () => {
       jest.spyOn(repository, 'findOne').mockResolvedValue(null);
 
       await repository.updateAsync(updateDto);
@@ -177,7 +220,7 @@ describe('AgendaItemRepository', () => {
   });
 
   describe('deleteAsync', () => {
-    it('should delete agenda item by id', async () => {
+    it('should delete by id', async () => {
       await repository.deleteAsync('test-uuid-123');
 
       expect(repository.delete).toHaveBeenCalledWith('test-uuid-123');

@@ -1,75 +1,51 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { DataSource, EntityManager } from 'typeorm';
+import { DataSource } from 'typeorm';
 import { PlaceholderAgendaSlotRepository } from './placeholder-agenda-slot.repository';
 import { PlaceholderAgendaSlotEntity } from '../entities/placeholder-agenda-slot.entity';
 import { CreatePlaceholderAgendaSlotDto } from '../dtos/create-placeholder-agenda-slot.dto';
 import { UpdatePlaceholderAgendaSlotDto } from '../dtos/update-placeholder-agenda-slot.dto';
 
 jest.mock('uuid', () => ({
-  v4: jest.fn().mockReturnValue('test-uuid-123'),
+  v4: jest.fn().mockReturnValue('generated-uuid-123'),
 }));
 
+/**
+ * Tests verify PlaceholderAgendaSlotRepository's logic:
+ * - UUID generation for new slots
+ * - Query building, entity-to-DTO mapping
+ * - Handling optional placeholder text
+ */
 describe('PlaceholderAgendaSlotRepository', () => {
   let repository: PlaceholderAgendaSlotRepository;
-  let mockEntityManager: Partial<EntityManager>;
-  let mockDataSource: Partial<DataSource>;
 
-  const mockPlaceholderSlotEntity: PlaceholderAgendaSlotEntity = {
-    id: 'test-uuid-123',
+  const existingEntity: PlaceholderAgendaSlotEntity = {
+    id: 'existing-uuid-123',
     from: new Date('2024-01-15T09:00:00Z'),
     to: new Date('2024-01-15T09:30:00Z'),
     trackId: 'track-uuid-123',
     placeholder: 'Coffee Break',
   };
 
-  beforeEach(async () => {
-    mockEntityManager = {
-      findOne: jest.fn(),
-      find: jest.fn(),
-      save: jest.fn(),
-      delete: jest.fn(),
-      create: jest.fn(),
-      merge: jest.fn(),
-    };
+  beforeEach(() => {
+    const mockDataSource = {
+      createEntityManager: jest.fn().mockReturnValue({}),
+    } as unknown as DataSource;
 
-    mockDataSource = {
-      createEntityManager: jest.fn().mockReturnValue(mockEntityManager),
-    };
-
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        PlaceholderAgendaSlotRepository,
-        {
-          provide: DataSource,
-          useValue: mockDataSource,
-        },
-      ],
-    }).compile();
-
-    repository = module.get<PlaceholderAgendaSlotRepository>(PlaceholderAgendaSlotRepository);
+    repository = new PlaceholderAgendaSlotRepository(mockDataSource);
 
     jest
       .spyOn(repository, 'create')
-      .mockImplementation((entity) => entity as PlaceholderAgendaSlotEntity);
-    jest.spyOn(repository, 'save').mockResolvedValue(mockPlaceholderSlotEntity);
-    jest.spyOn(repository, 'findOne').mockResolvedValue(mockPlaceholderSlotEntity);
-    jest.spyOn(repository, 'find').mockResolvedValue([mockPlaceholderSlotEntity]);
+      .mockImplementation((data) => data as PlaceholderAgendaSlotEntity);
+    jest.spyOn(repository, 'save').mockResolvedValue(existingEntity);
+    jest.spyOn(repository, 'findOne').mockResolvedValue(existingEntity);
+    jest.spyOn(repository, 'find').mockResolvedValue([existingEntity]);
     jest.spyOn(repository, 'delete').mockResolvedValue({ affected: 1, raw: {} });
-    jest.spyOn(repository, 'merge').mockImplementation(
-      (entity, data) =>
-        ({
-          ...entity,
-          ...data,
-        }) as PlaceholderAgendaSlotEntity,
-    );
+    jest.spyOn(repository, 'merge').mockImplementation((entity, ...sources) => {
+      return Object.assign({}, entity, ...sources) as PlaceholderAgendaSlotEntity;
+    });
   });
 
   afterEach(() => {
     jest.clearAllMocks();
-  });
-
-  it('should be defined', () => {
-    expect(repository).toBeDefined();
   });
 
   describe('addAsync', () => {
@@ -80,24 +56,29 @@ describe('PlaceholderAgendaSlotRepository', () => {
       placeholder: 'Coffee Break',
     };
 
-    it('should add placeholder slot with generated UUID', async () => {
-      await repository.addAsync(createDto);
-
-      expect(repository.create).toHaveBeenCalled();
-      expect(repository.save).toHaveBeenCalled();
-    });
-
-    it('should create slot with correct id', async () => {
+    it('should generate UUID for new slot', async () => {
       await repository.addAsync(createDto);
 
       expect(repository.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          id: 'test-uuid-123',
+          id: 'generated-uuid-123',
         }),
       );
     });
 
-    it('should add placeholder slot without placeholder text', async () => {
+    it('should map all DTO fields to entity', async () => {
+      await repository.addAsync(createDto);
+
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          trackId: 'track-uuid-123',
+          placeholder: 'Coffee Break',
+        }),
+      );
+      expect(repository.save).toHaveBeenCalled();
+    });
+
+    it('should handle slot without placeholder text', async () => {
       const dtoWithoutPlaceholder: CreatePlaceholderAgendaSlotDto = {
         from: '2024-01-15T09:00:00Z',
         to: '2024-01-15T09:30:00Z',
@@ -112,18 +93,23 @@ describe('PlaceholderAgendaSlotRepository', () => {
   });
 
   describe('getAsync', () => {
-    it('should return placeholder slot when found', async () => {
-      const result = await repository.getAsync('test-uuid-123');
+    it('should query by id with correct where clause', async () => {
+      await repository.getAsync('existing-uuid-123');
 
       expect(repository.findOne).toHaveBeenCalledWith({
-        where: { id: 'test-uuid-123' },
+        where: { id: 'existing-uuid-123' },
       });
-      expect(result).toBeDefined();
-      expect(result?.id).toBe('test-uuid-123');
+    });
+
+    it('should map entity to DTO when found', async () => {
+      const result = await repository.getAsync('existing-uuid-123');
+
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe('existing-uuid-123');
       expect(result?.placeholder).toBe('Coffee Break');
     });
 
-    it('should return null when placeholder slot not found', async () => {
+    it('should return null when entity not found', async () => {
       jest.spyOn(repository, 'findOne').mockResolvedValue(null);
 
       const result = await repository.getAsync('non-existent-id');
@@ -133,11 +119,25 @@ describe('PlaceholderAgendaSlotRepository', () => {
   });
 
   describe('browseAsync', () => {
-    it('should return all placeholder slots', async () => {
+    it('should return all slots', async () => {
       const result = await repository.browseAsync();
 
       expect(repository.find).toHaveBeenCalled();
       expect(result).toHaveLength(1);
+    });
+
+    it('should map all entities to DTOs', async () => {
+      const multipleEntities = [
+        existingEntity,
+        { ...existingEntity, id: 'second-id', placeholder: 'Lunch Break' },
+      ];
+      jest.spyOn(repository, 'find').mockResolvedValue(multipleEntities);
+
+      const result = await repository.browseAsync();
+
+      expect(result).toHaveLength(2);
+      expect(result[0].placeholder).toBe('Coffee Break');
+      expect(result[1].placeholder).toBe('Lunch Break');
     });
 
     it('should return empty array when no slots exist', async () => {
@@ -151,21 +151,31 @@ describe('PlaceholderAgendaSlotRepository', () => {
 
   describe('updateAsync', () => {
     const updateDto: UpdatePlaceholderAgendaSlotDto = {
-      id: 'test-uuid-123',
+      id: 'existing-uuid-123',
       placeholder: 'Lunch Break',
     };
 
-    it('should update placeholder slot when exists', async () => {
+    it('should query for existing entity before updating', async () => {
       await repository.updateAsync(updateDto);
 
       expect(repository.findOne).toHaveBeenCalledWith({
-        where: { id: updateDto.id },
+        where: { id: 'existing-uuid-123' },
       });
-      expect(repository.merge).toHaveBeenCalled();
+    });
+
+    it('should merge update data with existing entity', async () => {
+      await repository.updateAsync(updateDto);
+
+      expect(repository.merge).toHaveBeenCalledWith(
+        existingEntity,
+        expect.objectContaining({
+          placeholder: 'Lunch Break',
+        }),
+      );
       expect(repository.save).toHaveBeenCalled();
     });
 
-    it('should not update when placeholder slot not found', async () => {
+    it('should not save when entity not found', async () => {
       jest.spyOn(repository, 'findOne').mockResolvedValue(null);
 
       await repository.updateAsync(updateDto);
@@ -176,7 +186,7 @@ describe('PlaceholderAgendaSlotRepository', () => {
 
     it('should update time fields', async () => {
       const updateDtoWithTime: UpdatePlaceholderAgendaSlotDto = {
-        id: 'test-uuid-123',
+        id: 'existing-uuid-123',
         from: '2024-01-15T08:30:00Z',
         to: '2024-01-15T09:00:00Z',
       };
@@ -189,10 +199,10 @@ describe('PlaceholderAgendaSlotRepository', () => {
   });
 
   describe('deleteAsync', () => {
-    it('should delete placeholder slot by id', async () => {
-      await repository.deleteAsync('test-uuid-123');
+    it('should delete by id', async () => {
+      await repository.deleteAsync('existing-uuid-123');
 
-      expect(repository.delete).toHaveBeenCalledWith('test-uuid-123');
+      expect(repository.delete).toHaveBeenCalledWith('existing-uuid-123');
     });
   });
 });
