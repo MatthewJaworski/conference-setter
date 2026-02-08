@@ -8,12 +8,6 @@ jest.mock('uuid', () => ({
   v4: jest.fn().mockReturnValue('generated-uuid-123'),
 }));
 
-/**
- * Tests verify PlaceholderAgendaSlotRepository's logic:
- * - UUID generation for new slots
- * - Query building, entity-to-DTO mapping
- * - Handling optional placeholder text
- */
 describe('PlaceholderAgendaSlotRepository', () => {
   let repository: PlaceholderAgendaSlotRepository;
 

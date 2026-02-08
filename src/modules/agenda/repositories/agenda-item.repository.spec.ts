@@ -4,22 +4,10 @@ import { AgendaItemEntity } from '../entities/agenda-item.entity';
 import { CreateAgendaItemDto } from '../dtos/create-agenda-item.dto';
 import { UpdateAgendaItemDto } from '../dtos/update-agenda-item.dto';
 
-// Mock uuid to have predictable IDs
 jest.mock('uuid', () => ({
   v4: jest.fn().mockReturnValue('generated-uuid-123'),
 }));
 
-/**
- * These tests verify that AgendaItemRepository correctly:
- * - Generates UUIDs and sets initial version
- * - Builds correct queries for TypeORM
- * - Maps entities to DTOs
- * - Increments version on updates
- * - Handles not-found scenarios
- *
- * We mock the inherited Repository methods (save, findOne, etc.)
- * to test the repository's own logic without hitting a real database.
- */
 describe('AgendaItemRepository', () => {
   let repository: AgendaItemRepository;
 

@@ -8,12 +8,6 @@ jest.mock('uuid', () => ({
   v4: jest.fn().mockReturnValue('generated-uuid-123'),
 }));
 
-/**
- * These tests verify AgendaTrackRepository's logic:
- * - UUID generation, version management
- * - Query building, entity-to-DTO mapping
- * - existsAsync logic
- */
 describe('AgendaTrackRepository', () => {
   let repository: AgendaTrackRepository;
 

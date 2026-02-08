@@ -8,12 +8,6 @@ jest.mock('uuid', () => ({
   v4: jest.fn().mockReturnValue('generated-uuid-123'),
 }));
 
-/**
- * Tests verify AgendaSlotRepository's logic:
- * - UUID generation for new slots
- * - Query building with correct where clauses
- * - Entity-to-DTO mapping
- */
 describe('AgendaSlotRepository', () => {
   let repository: AgendaSlotRepository;
 

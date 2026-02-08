@@ -8,13 +8,6 @@ jest.mock('uuid', () => ({
   v4: jest.fn().mockReturnValue('generated-uuid-123'),
 }));
 
-/**
- * Tests verify SpeakerRepository's logic:
- * - UUID generation for new speakers
- * - Query building with correct where clauses
- * - Entity-to-DTO mapping
- * - getByEmailAsync query logic
- */
 describe('SpeakerRepository', () => {
   let repository: SpeakerRepository;
 

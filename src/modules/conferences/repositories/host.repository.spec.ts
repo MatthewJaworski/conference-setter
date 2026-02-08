@@ -8,12 +8,6 @@ jest.mock('uuid', () => ({
   v4: jest.fn().mockReturnValue('generated-uuid-123'),
 }));
 
-/**
- * Tests verify HostsRepository's logic:
- * - UUID generation for new hosts
- * - Query building with correct where clauses and relations
- * - Entity-to-DTO mapping
- */
 describe('HostsRepository', () => {
   let repository: HostsRepository;
 
