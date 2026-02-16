@@ -1,67 +1,19 @@
 /* eslint-disable @eslint-community/eslint-comments/disable-enable-pair */
-/* eslint-disable @eslint-community/eslint-comments/no-duplicate-disable */
-/* eslint-disable @eslint-community/eslint-comments/disable-enable-pair */
-/* eslint-disable @typescript-eslint/no-require-imports */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @eslint-community/eslint-comments/disable-enable-pair */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+
 import { Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { DataSource } from 'typeorm';
-
-// Mock all entities
-jest.mock('@/modules/conferences/entities/conference.entity', () => ({
-  ConferenceEntity: jest.fn(),
-}));
-jest.mock('@/modules/conferences/entities/host.entity', () => ({
-  HostEntity: jest.fn(),
-}));
-jest.mock('@/modules/speakers/entities/speaker.entity', () => ({
-  SpeakerEntity: jest.fn(),
-}));
-jest.mock('@/modules/agenda/entities/agenda-item.entity', () => ({
-  AgendaItemEntity: jest.fn(),
-}));
-jest.mock('@/modules/agenda/entities/agenda-track.entity', () => ({
-  AgendaTrackEntity: jest.fn(),
-}));
-jest.mock('@/modules/agenda/entities/agenda-slot.entity', () => ({
-  AgendaSlotEntity: jest.fn(),
-}));
-jest.mock('@/modules/agenda/entities/placeholder-agenda-slot.entity', () => ({
-  PlaceholderAgendaSlotEntity: jest.fn(),
-}));
-jest.mock('@/modules/agenda/entities/regular-agenda-slot.entity', () => ({
-  RegularAgendaSlotEntity: jest.fn(),
-}));
-
-// Mock DataSource
-jest.mock('typeorm', () => {
-  const actual = jest.requireActual('typeorm');
-  return {
-    ...actual,
-    DataSource: jest.fn(),
-  };
-});
-
-// Mock ConfigService
-jest.mock('@nestjs/config', () => ({
-  ConfigService: jest.fn(),
-}));
-
-// Mock database config provider
-jest.mock('../database-config.provider', () => ({
-  TypeOrmConfigProvider: jest.fn().mockReturnValue({
-    type: 'postgres',
-    host: 'localhost',
-    port: 5432,
-    username: 'test',
-    password: 'test',
-    database: 'test',
-  }),
-}));
+import { seedDatabase } from './seed';
+import { mockHosts } from '@/shared/mocks/hosts.mock';
+import { mockConferences } from '@/shared/mocks/conferences.mock';
+import { mockSpeakers } from '@/shared/mocks/speakers.mock';
+import { mockAgendaItems } from '@/shared/mocks/agenda-items.mock';
+import {
+  mockAgendaTracks,
+  mockPlaceholderSlots,
+  mockRegularSlots,
+} from '@/shared/mocks/agenda.mock';
 
 interface MockRepository {
   save: jest.Mock;
@@ -70,324 +22,318 @@ interface MockRepository {
   createQueryBuilder: jest.Mock;
 }
 
-describe('Database Seed Command', () => {
+describe('seedDatabase', () => {
   let mockDataSource: jest.Mocked<DataSource>;
-  let mockHostRepository: MockRepository;
-  let mockConferenceRepository: MockRepository;
-  let mockSpeakerRepository: MockRepository;
-  let mockAgendaItemRepository: MockRepository;
-  let mockAgendaTrackRepository: MockRepository;
-  let mockPlaceholderSlotRepository: MockRepository;
-  let mockRegularSlotRepository: MockRepository;
-  let loggerLogSpy: jest.SpyInstance;
-  let loggerErrorSpy: jest.SpyInstance;
-  let processExitSpy: jest.SpyInstance;
+  let mockLogger: jest.Mocked<Logger>;
+  let repositories: Record<string, MockRepository>;
 
-  const createMockRepository = () => ({
-    save: jest.fn(),
-    create: jest.fn((data) => data),
-    count: jest.fn(),
-    createQueryBuilder: jest.fn().mockReturnValue({
-      delete: jest.fn().mockReturnValue({
-        execute: jest.fn().mockResolvedValue(undefined),
+  const createMockRepository = (): MockRepository => {
+    const executeMock = jest.fn().mockResolvedValue(undefined);
+    const deleteMock = jest.fn().mockReturnValue({ execute: executeMock });
+    return {
+      save: jest.fn().mockImplementation((entities) => {
+        if (Array.isArray(entities)) {
+          return Promise.resolve(
+            entities.map((e: Record<string, unknown>, i: number) => ({
+              ...e,
+              id: `generated-id-${i}`,
+            })),
+          );
+        }
+        return Promise.resolve({ ...entities, id: 'generated-id-0' });
       }),
-    }),
-  });
+      create: jest.fn().mockImplementation((data) => data),
+      count: jest.fn().mockResolvedValue(0),
+      createQueryBuilder: jest.fn().mockReturnValue({ delete: deleteMock }),
+    };
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
 
-    // Create mock repositories
-    mockHostRepository = createMockRepository();
-    mockConferenceRepository = createMockRepository();
-    mockSpeakerRepository = createMockRepository();
-    mockAgendaItemRepository = createMockRepository();
-    mockAgendaTrackRepository = createMockRepository();
-    mockPlaceholderSlotRepository = createMockRepository();
-    mockRegularSlotRepository = createMockRepository();
+    repositories = {
+      HostEntity: createMockRepository(),
+      ConferenceEntity: createMockRepository(),
+      SpeakerEntity: createMockRepository(),
+      AgendaItemEntity: createMockRepository(),
+      AgendaTrackEntity: createMockRepository(),
+      PlaceholderAgendaSlotEntity: createMockRepository(),
+      RegularAgendaSlotEntity: createMockRepository(),
+    };
 
-    // Setup mock DataSource
     mockDataSource = {
       initialize: jest.fn().mockResolvedValue(undefined),
       destroy: jest.fn().mockResolvedValue(undefined),
-      getRepository: jest.fn((entity) => {
-        const entityName = entity.name || entity.toString();
-        if (entityName.includes('Host')) return mockHostRepository;
-        if (entityName.includes('Conference')) return mockConferenceRepository;
-        if (entityName.includes('Speaker')) return mockSpeakerRepository;
-        if (entityName.includes('AgendaItem')) return mockAgendaItemRepository;
-        if (entityName.includes('AgendaTrack')) return mockAgendaTrackRepository;
-        if (entityName.includes('Placeholder')) return mockPlaceholderSlotRepository;
-        if (entityName.includes('Regular')) return mockRegularSlotRepository;
+      getRepository: jest.fn((entity: { name?: string }) => {
+        const name = entity.name ?? '';
+        if (name.includes('Host')) return repositories['HostEntity'];
+        if (name.includes('Conference')) return repositories['ConferenceEntity'];
+        if (name.includes('Speaker')) return repositories['SpeakerEntity'];
+        if (name.includes('AgendaItem')) return repositories['AgendaItemEntity'];
+        if (name.includes('AgendaTrack')) return repositories['AgendaTrackEntity'];
+        if (name.includes('Placeholder')) return repositories['PlaceholderAgendaSlotEntity'];
+        if (name.includes('Regular')) return repositories['RegularAgendaSlotEntity'];
         return createMockRepository();
       }),
     } as unknown as jest.Mocked<DataSource>;
 
-    (DataSource as jest.Mock).mockImplementation(() => mockDataSource);
-
-    // Mock Logger
-    loggerLogSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation();
-    loggerErrorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
-
-    // Mock process.exit
-    processExitSpy = jest.spyOn(process, 'exit').mockImplementation();
+    mockLogger = {
+      log: jest.fn(),
+      error: jest.fn(),
+    } as unknown as jest.Mocked<Logger>;
   });
 
-  afterEach(() => {
-    loggerLogSpy.mockRestore();
-    loggerErrorSpy.mockRestore();
-    processExitSpy.mockRestore();
+  it('should initialize the data source', async () => {
+    await seedDatabase(mockDataSource, mockLogger);
+
+    expect(mockDataSource.initialize).toHaveBeenCalledTimes(1);
   });
 
-  describe('Seeding Logic', () => {
-    it('should create DataSource with correct configuration', () => {
-      const { TypeOrmConfigProvider } = require('../database-config.provider');
+  it('should destroy the data source after seeding', async () => {
+    await seedDatabase(mockDataSource, mockLogger);
 
-      expect(TypeOrmConfigProvider).toBeDefined();
+    expect(mockDataSource.destroy).toHaveBeenCalledTimes(1);
+  });
 
-      const config = TypeOrmConfigProvider(new ConfigService());
+  it('should get repositories for all 7 entity types', async () => {
+    await seedDatabase(mockDataSource, mockLogger);
 
-      expect(config).toHaveProperty('type', 'postgres');
+    expect(mockDataSource.getRepository).toHaveBeenCalledTimes(7);
+  });
+
+  describe('clearing existing data', () => {
+    it('should delete data from all 7 tables', async () => {
+      await seedDatabase(mockDataSource, mockLogger);
+
+      for (const repo of Object.values(repositories)) {
+        expect(repo.createQueryBuilder).toHaveBeenCalled();
+      }
     });
 
-    it('should initialize DataSource successfully', async () => {
-      await mockDataSource.initialize();
+    it('should delete data in correct FK order (children before parents)', async () => {
+      const deleteOrder: string[] = [];
 
-      expect(mockDataSource.initialize).toHaveBeenCalled();
-    });
+      for (const [name, repo] of Object.entries(repositories)) {
+        const executeMock = jest.fn().mockImplementation(() => {
+          deleteOrder.push(name);
+          return Promise.resolve(undefined);
+        });
+        const deleteMock = jest.fn().mockReturnValue({ execute: executeMock });
+        repo.createQueryBuilder.mockReturnValue({ delete: deleteMock });
+      }
 
-    it('should get all required repositories', () => {
-      const repositories = [
-        'HostEntity',
-        'ConferenceEntity',
-        'SpeakerEntity',
-        'AgendaItemEntity',
-        'AgendaTrackEntity',
-        'PlaceholderAgendaSlotEntity',
+      await seedDatabase(mockDataSource, mockLogger);
+
+      expect(deleteOrder).toEqual([
         'RegularAgendaSlotEntity',
-      ];
-
-      repositories.forEach((entityName) => {
-        const repo = mockDataSource.getRepository({ name: entityName } as never);
-        expect(repo).toBeDefined();
-      });
-    });
-
-    it('should clear existing data in correct order', async () => {
-      // Execute delete operations in order
-      await mockRegularSlotRepository.createQueryBuilder().delete().execute();
-      await mockPlaceholderSlotRepository.createQueryBuilder().delete().execute();
-      await mockAgendaTrackRepository.createQueryBuilder().delete().execute();
-      await mockAgendaItemRepository.createQueryBuilder().delete().execute();
-      await mockConferenceRepository.createQueryBuilder().delete().execute();
-      await mockHostRepository.createQueryBuilder().delete().execute();
-      await mockSpeakerRepository.createQueryBuilder().delete().execute();
-
-      expect(mockRegularSlotRepository.createQueryBuilder).toHaveBeenCalled();
-      expect(mockPlaceholderSlotRepository.createQueryBuilder).toHaveBeenCalled();
-      expect(mockAgendaTrackRepository.createQueryBuilder).toHaveBeenCalled();
-      expect(mockAgendaItemRepository.createQueryBuilder).toHaveBeenCalled();
-      expect(mockConferenceRepository.createQueryBuilder).toHaveBeenCalled();
-      expect(mockHostRepository.createQueryBuilder).toHaveBeenCalled();
-      expect(mockSpeakerRepository.createQueryBuilder).toHaveBeenCalled();
-    });
-
-    it('should save hosts from mock data', async () => {
-      const mockHosts = [
-        { id: 'host-1', name: 'Tech Innovators Inc.' },
-        { id: 'host-2', name: 'Business Leaders Forum' },
-      ];
-      mockHostRepository.save.mockResolvedValue(mockHosts);
-
-      const result = await mockHostRepository.save([]);
-
-      expect(mockHostRepository.save).toHaveBeenCalled();
-      expect(result).toEqual(mockHosts);
-    });
-
-    it('should save conferences with correct hostId references', async () => {
-      const mockHosts = [{ id: 'host-1' }, { id: 'host-2' }];
-      const mockConferences = [
-        { id: 'conf-1', hostId: 'host-1', name: 'TechCon 2026' },
-        { id: 'conf-2', hostId: 'host-2', name: 'DevOps Summit 2026' },
-      ];
-
-      mockHostRepository.save.mockResolvedValue(mockHosts);
-      mockConferenceRepository.save.mockResolvedValue(mockConferences);
-
-      await mockHostRepository.save([]);
-      const conferences = await mockConferenceRepository.save([]);
-
-      expect(conferences[0].hostId).toBe('host-1');
-      expect(conferences[1].hostId).toBe('host-2');
-    });
-
-    it('should save speakers from mock data', async () => {
-      const mockSpeakers = [
-        { id: 'speaker-1', fullName: 'Sarah Johnson', email: 'sarah@example.com' },
-        { id: 'speaker-2', fullName: 'Michael Chen', email: 'michael@example.com' },
-      ];
-      mockSpeakerRepository.save.mockResolvedValue(mockSpeakers);
-
-      const result = await mockSpeakerRepository.save([]);
-
-      expect(mockSpeakerRepository.save).toHaveBeenCalled();
-      expect(result).toHaveLength(2);
-    });
-
-    it('should save agenda items with correct conferenceId and speakerIds', async () => {
-      const mockConferences = [{ id: 'conf-1' }];
-      const mockSpeakers = [{ id: 'speaker-1' }, { id: 'speaker-2' }];
-      const mockAgendaItems = [
-        {
-          id: 'item-1',
-          conferenceId: 'conf-1',
-          speakerIds: ['speaker-1'],
-          title: 'Opening Keynote',
-        },
-      ];
-
-      mockConferenceRepository.save.mockResolvedValue(mockConferences);
-      mockSpeakerRepository.save.mockResolvedValue(mockSpeakers);
-      mockAgendaItemRepository.save.mockResolvedValue(mockAgendaItems);
-
-      const items = await mockAgendaItemRepository.save([]);
-
-      expect(items[0].conferenceId).toBe('conf-1');
-      expect(items[0].speakerIds).toContain('speaker-1');
-    });
-
-    it('should save agenda tracks with correct conferenceId', async () => {
-      const mockConferences = [{ id: 'conf-1' }];
-      const mockAgendaTracks = [{ id: 'track-1', conferenceId: 'conf-1', name: 'Main Stage' }];
-
-      mockConferenceRepository.save.mockResolvedValue(mockConferences);
-      mockAgendaTrackRepository.save.mockResolvedValue(mockAgendaTracks);
-
-      const tracks = await mockAgendaTrackRepository.save([]);
-
-      expect(tracks[0].conferenceId).toBe('conf-1');
-    });
-
-    it('should save placeholder slots with correct trackId', async () => {
-      const mockTracks = [{ id: 'track-1' }];
-      const mockPlaceholderSlots = [
-        { id: 'slot-1', trackId: 'track-1', placeholder: 'Coffee Break' },
-      ];
-
-      mockAgendaTrackRepository.save.mockResolvedValue(mockTracks);
-      mockPlaceholderSlotRepository.save.mockResolvedValue(mockPlaceholderSlots);
-
-      const slots = await mockPlaceholderSlotRepository.save([]);
-
-      expect(slots[0].trackId).toBe('track-1');
-    });
-
-    it('should save regular slots with correct trackId and agendaItemId', async () => {
-      const mockTracks = [{ id: 'track-1' }];
-      const mockItems = [{ id: 'item-1' }];
-      const mockRegularSlots = [{ id: 'slot-1', trackId: 'track-1', agendaItemId: 'item-1' }];
-
-      mockAgendaTrackRepository.save.mockResolvedValue(mockTracks);
-      mockAgendaItemRepository.save.mockResolvedValue(mockItems);
-      mockRegularSlotRepository.save.mockResolvedValue(mockRegularSlots);
-
-      const slots = await mockRegularSlotRepository.save([]);
-
-      expect(slots[0].trackId).toBe('track-1');
-      expect(slots[0].agendaItemId).toBe('item-1');
-    });
-
-    it('should count all entities after seeding', async () => {
-      mockHostRepository.count.mockResolvedValue(3);
-      mockConferenceRepository.count.mockResolvedValue(5);
-      mockSpeakerRepository.count.mockResolvedValue(6);
-      mockAgendaItemRepository.count.mockResolvedValue(15);
-      mockAgendaTrackRepository.count.mockResolvedValue(8);
-      mockPlaceholderSlotRepository.count.mockResolvedValue(10);
-      mockRegularSlotRepository.count.mockResolvedValue(12);
-
-      expect(await mockHostRepository.count()).toBe(3);
-      expect(await mockConferenceRepository.count()).toBe(5);
-      expect(await mockSpeakerRepository.count()).toBe(6);
-      expect(await mockAgendaItemRepository.count()).toBe(15);
-      expect(await mockAgendaTrackRepository.count()).toBe(8);
-      expect(await mockPlaceholderSlotRepository.count()).toBe(10);
-      expect(await mockRegularSlotRepository.count()).toBe(12);
-    });
-
-    it('should destroy DataSource after successful seeding', async () => {
-      await mockDataSource.destroy();
-
-      expect(mockDataSource.destroy).toHaveBeenCalled();
+        'PlaceholderAgendaSlotEntity',
+        'AgendaTrackEntity',
+        'AgendaItemEntity',
+        'ConferenceEntity',
+        'HostEntity',
+        'SpeakerEntity',
+      ]);
     });
   });
 
-  describe('Error Handling', () => {
-    it('should handle DataSource initialization error', async () => {
-      const error = new Error('Connection failed');
-      mockDataSource.initialize.mockRejectedValue(error);
+  describe('seeding hosts', () => {
+    it('should create and save all hosts from mock data', async () => {
+      const hostRepo = repositories['HostEntity'];
 
-      await expect(mockDataSource.initialize()).rejects.toThrow('Connection failed');
+      await seedDatabase(mockDataSource, mockLogger);
+
+      expect(hostRepo.create).toHaveBeenCalledTimes(mockHosts.length);
+      expect(hostRepo.save).toHaveBeenCalledTimes(1);
     });
 
-    it('should handle repository save error', async () => {
-      const error = new Error('Save failed');
-      mockHostRepository.save.mockRejectedValue(error);
+    it('should pass host data to create without modification', async () => {
+      const hostRepo = repositories['HostEntity'];
 
-      await expect(mockHostRepository.save([])).rejects.toThrow('Save failed');
-    });
+      await seedDatabase(mockDataSource, mockLogger);
 
-    it('should handle delete query error', async () => {
-      const error = new Error('Delete failed');
-      mockRegularSlotRepository.createQueryBuilder.mockReturnValue({
-        delete: jest.fn().mockReturnValue({
-          execute: jest.fn().mockRejectedValue(error),
-        }),
+      mockHosts.forEach((hostData, i) => {
+        expect(hostRepo.create).toHaveBeenNthCalledWith(i + 1, hostData);
       });
-
-      await expect(
-        mockRegularSlotRepository.createQueryBuilder().delete().execute(),
-      ).rejects.toThrow('Delete failed');
     });
   });
 
-  describe('Repository Operations', () => {
-    it('should call create method for each entity', () => {
-      const hostData = { name: 'Test Host', description: 'Test description' };
+  describe('seeding conferences', () => {
+    it('should create and save all conferences from mock data', async () => {
+      const confRepo = repositories['ConferenceEntity'];
 
-      mockHostRepository.create(hostData);
+      await seedDatabase(mockDataSource, mockLogger);
 
-      expect(mockHostRepository.create).toHaveBeenCalledWith(hostData);
+      expect(confRepo.create).toHaveBeenCalledTimes(mockConferences.length);
+      expect(confRepo.save).toHaveBeenCalledTimes(1);
     });
 
-    it('should call save method with array of entities', async () => {
-      const hostsData = [
-        { name: 'Host 1', description: 'Description 1' },
-        { name: 'Host 2', description: 'Description 2' },
-      ];
-      mockHostRepository.save.mockResolvedValue(hostsData);
+    it('should resolve hostIndex to actual host id', async () => {
+      const confRepo = repositories['ConferenceEntity'];
 
-      const result = await mockHostRepository.save(hostsData);
+      await seedDatabase(mockDataSource, mockLogger);
 
-      expect(mockHostRepository.save).toHaveBeenCalledWith(hostsData);
-      expect(result).toHaveLength(2);
+      for (let i = 0; i < mockConferences.length; i++) {
+        const createCall = confRepo.create.mock.calls[i][0] as Record<string, unknown>;
+        expect(createCall).toHaveProperty('hostId');
+        expect(createCall).not.toHaveProperty('hostIndex');
+      }
+    });
+  });
+
+  describe('seeding speakers', () => {
+    it('should create and save all speakers from mock data', async () => {
+      const speakerRepo = repositories['SpeakerEntity'];
+
+      await seedDatabase(mockDataSource, mockLogger);
+
+      expect(speakerRepo.create).toHaveBeenCalledTimes(mockSpeakers.length);
+      expect(speakerRepo.save).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('seeding agenda items', () => {
+    it('should create and save all agenda items from mock data', async () => {
+      const itemRepo = repositories['AgendaItemEntity'];
+
+      await seedDatabase(mockDataSource, mockLogger);
+
+      expect(itemRepo.create).toHaveBeenCalledTimes(mockAgendaItems.length);
+      expect(itemRepo.save).toHaveBeenCalledTimes(1);
     });
 
-    it('should execute delete query builder chain correctly', async () => {
-      const deleteBuilder = {
-        execute: jest.fn().mockResolvedValue({ affected: 5 }),
-      };
-      const queryBuilder = {
-        delete: jest.fn().mockReturnValue(deleteBuilder),
-      };
-      mockHostRepository.createQueryBuilder.mockReturnValue(queryBuilder);
+    it('should resolve conferenceIndex and speakerIndices to actual ids', async () => {
+      const itemRepo = repositories['AgendaItemEntity'];
 
-      await mockHostRepository.createQueryBuilder().delete().execute();
+      await seedDatabase(mockDataSource, mockLogger);
 
-      expect(mockHostRepository.createQueryBuilder).toHaveBeenCalled();
-      expect(queryBuilder.delete).toHaveBeenCalled();
-      expect(deleteBuilder.execute).toHaveBeenCalled();
+      for (let i = 0; i < mockAgendaItems.length; i++) {
+        const createCall = itemRepo.create.mock.calls[i][0] as Record<string, unknown>;
+        expect(createCall).toHaveProperty('conferenceId');
+        expect(createCall).toHaveProperty('speakerIds');
+        expect(createCall).not.toHaveProperty('conferenceIndex');
+        expect(createCall).not.toHaveProperty('speakerIndices');
+        expect(Array.isArray(createCall['speakerIds'])).toBe(true);
+      }
+    });
+  });
+
+  describe('seeding agenda tracks', () => {
+    it('should create and save all agenda tracks from mock data', async () => {
+      const trackRepo = repositories['AgendaTrackEntity'];
+
+      await seedDatabase(mockDataSource, mockLogger);
+
+      expect(trackRepo.create).toHaveBeenCalledTimes(mockAgendaTracks.length);
+      expect(trackRepo.save).toHaveBeenCalledTimes(1);
+    });
+
+    it('should resolve conferenceIndex to actual conference id', async () => {
+      const trackRepo = repositories['AgendaTrackEntity'];
+
+      await seedDatabase(mockDataSource, mockLogger);
+
+      for (let i = 0; i < mockAgendaTracks.length; i++) {
+        const createCall = trackRepo.create.mock.calls[i][0] as Record<string, unknown>;
+        expect(createCall).toHaveProperty('conferenceId');
+        expect(createCall).not.toHaveProperty('conferenceIndex');
+      }
+    });
+  });
+
+  describe('seeding placeholder slots', () => {
+    it('should create and save all placeholder slots from mock data', async () => {
+      const placeholderRepo = repositories['PlaceholderAgendaSlotEntity'];
+
+      await seedDatabase(mockDataSource, mockLogger);
+
+      expect(placeholderRepo.create).toHaveBeenCalledTimes(mockPlaceholderSlots.length);
+      expect(placeholderRepo.save).toHaveBeenCalledTimes(1);
+    });
+
+    it('should resolve trackIndex to actual track id', async () => {
+      const placeholderRepo = repositories['PlaceholderAgendaSlotEntity'];
+
+      await seedDatabase(mockDataSource, mockLogger);
+
+      for (let i = 0; i < mockPlaceholderSlots.length; i++) {
+        const createCall = placeholderRepo.create.mock.calls[i][0] as Record<string, unknown>;
+        expect(createCall).toHaveProperty('trackId');
+        expect(createCall).not.toHaveProperty('trackIndex');
+      }
+    });
+  });
+
+  describe('seeding regular slots', () => {
+    it('should create and save all regular slots from mock data', async () => {
+      const regularRepo = repositories['RegularAgendaSlotEntity'];
+
+      await seedDatabase(mockDataSource, mockLogger);
+
+      expect(regularRepo.create).toHaveBeenCalledTimes(mockRegularSlots.length);
+      expect(regularRepo.save).toHaveBeenCalledTimes(1);
+    });
+
+    it('should resolve trackIndex and agendaItemIndex to actual ids', async () => {
+      const regularRepo = repositories['RegularAgendaSlotEntity'];
+
+      await seedDatabase(mockDataSource, mockLogger);
+
+      for (let i = 0; i < mockRegularSlots.length; i++) {
+        const createCall = regularRepo.create.mock.calls[i][0] as Record<string, unknown>;
+        expect(createCall).toHaveProperty('trackId');
+        expect(createCall).toHaveProperty('agendaItemId');
+        expect(createCall).not.toHaveProperty('trackIndex');
+        expect(createCall).not.toHaveProperty('agendaItemIndex');
+      }
+    });
+  });
+
+  describe('logging', () => {
+    it('should log seed data summary with counts', async () => {
+      repositories['HostEntity'].count.mockResolvedValue(3);
+      repositories['ConferenceEntity'].count.mockResolvedValue(6);
+      repositories['SpeakerEntity'].count.mockResolvedValue(6);
+      repositories['AgendaItemEntity'].count.mockResolvedValue(12);
+      repositories['AgendaTrackEntity'].count.mockResolvedValue(7);
+      repositories['PlaceholderAgendaSlotEntity'].count.mockResolvedValue(5);
+      repositories['RegularAgendaSlotEntity'].count.mockResolvedValue(12);
+
+      await seedDatabase(mockDataSource, mockLogger);
+
+      expect(mockLogger.log).toHaveBeenCalledWith('Database connected successfully');
+      expect(mockLogger.log).toHaveBeenCalledWith('Cleared existing data');
+      expect(mockLogger.log).toHaveBeenCalledWith('- 3 hosts');
+      expect(mockLogger.log).toHaveBeenCalledWith('- 6 conferences');
+      expect(mockLogger.log).toHaveBeenCalledWith('- 6 speakers');
+      expect(mockLogger.log).toHaveBeenCalledWith('- 12 agenda items');
+      expect(mockLogger.log).toHaveBeenCalledWith('- 7 agenda tracks');
+      expect(mockLogger.log).toHaveBeenCalledWith('- 5 placeholder slots');
+      expect(mockLogger.log).toHaveBeenCalledWith('- 12 regular slots');
+      expect(mockLogger.log).toHaveBeenCalledWith('\nDatabase seeding completed successfully!');
+    });
+  });
+
+  describe('error propagation', () => {
+    it('should propagate initialization error', async () => {
+      mockDataSource.initialize.mockRejectedValue(new Error('Connection failed'));
+
+      await expect(seedDatabase(mockDataSource, mockLogger)).rejects.toThrow('Connection failed');
+    });
+
+    it('should propagate save error', async () => {
+      repositories['HostEntity'].save.mockRejectedValue(new Error('Save failed'));
+
+      await expect(seedDatabase(mockDataSource, mockLogger)).rejects.toThrow('Save failed');
+    });
+
+    it('should propagate delete error', async () => {
+      const executeMock = jest.fn().mockRejectedValue(new Error('Delete failed'));
+      const deleteMock = jest.fn().mockReturnValue({ execute: executeMock });
+      repositories['RegularAgendaSlotEntity'].createQueryBuilder.mockReturnValue({
+        delete: deleteMock,
+      });
+
+      await expect(seedDatabase(mockDataSource, mockLogger)).rejects.toThrow('Delete failed');
     });
   });
 });
